@@ -35,27 +35,25 @@ int main()
         }
         else
         {
-           // server;
+           
+            CServerSocket* pserver = CServerSocket::getInstance();
+            int count = 0;
+            if (pserver->InitSocket() == false) {
+                MessageBox(NULL, _T("网络初始化异常，未能成功初始hi，请检查网络状态！"), _T("网络初始化失败"), MB_OK | MB_ICONERROR);
+                exit(0);
+            }
+            while (CServerSocket::getInstance() != NULL) {
+                if (pserver->AcceptClient() == false) {
+                    if (count >= 3) {
+                        MessageBox(NULL, _T("多次无法正常接入用户，结束程序！"), _T("接入用户失败！"), MB_OK | MB_ICONERROR);
+                        exit(0);
+                    }
+                    MessageBox(NULL, _T("无法正常接入用户，自动重试"), _T("接入用户失败！"), MB_OK | MB_ICONERROR);
+                    count++;
+                }
+            }
+            int ret = pserver->DealCommand();
             
-            SOCKET serv_sock= socket(PF_INET, SOCK_STREAM, 0);
-
-			sockaddr_in serv_addr,client_adr;
-			memset(&serv_addr, 0, sizeof(serv_addr));
-			serv_addr.sin_family = AF_INET;
-			serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-			serv_addr.sin_port = htons(9527);
-			
-			bind(serv_sock, (sockaddr*)&serv_addr, sizeof(serv_addr));
-			listen(serv_sock, 1);
-
-			char buffer[1024];
-
-			int cli_sz = sizeof(client_adr);
-			//SCOKET client=accept(serv_sock, (sockaddr*)&client_adr, &cli_sz);
-            //recv(client, buffer, sizeof(buffer), 0);
-			//send(client, buffer, sizeof(buffer), 0);
-
-			closesocket(serv_sock);
 			
         }
     }
