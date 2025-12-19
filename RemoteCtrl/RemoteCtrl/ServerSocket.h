@@ -58,7 +58,6 @@ public:
                 memmove(buffer, buffer + len, BUFFER_SIZE -len);
 				index -= len;
                 return m_packet.sCmd;
-            
             }
         }
         return -1;
