@@ -4,6 +4,8 @@
 #include "framework.h"
 
 
+#define BUFFER_SIZE 4096
+
 class CServerSocket
 {
 public:
@@ -40,17 +42,26 @@ public:
     }
 
     int DealCommand() {
-        if (m_client == -1) { return false; }
-        char buffer[1024] = "";
+        if (m_client == -1) { return -1; }
+		char* buffer = new char[BUFFER_SIZE];
+		memset(buffer, 0, BUFFER_SIZE);
+		size_t index = 0;
         while (true) {
-            int len = recv(m_client, buffer, sizeof(buffer), 0);
+            size_t len = recv(m_client, buffer+ index, BUFFER_SIZE -index, 0);
             if (len <= 0) { 
                 return -1; 
             }
-
-
+			index += len;
+            len = index;
+            m_packet = CPacket((BYTE*)buffer, len);  //通过构造函数解析数据包
+            if (len > 0) {
+                memmove(buffer, buffer + len, BUFFER_SIZE -len);
+				index -= len;
+                return m_packet.sCmd;
+            
+            }
         }
-    
+        return -1;
     }
 
     bool Send(const char* pData, int nSize) {
@@ -112,7 +123,84 @@ private:
 
     SOCKET m_sock;
     SOCKET m_client;
-
+    CPacket m_packet;
 };
 
 
+class CPacket   //数据包结构
+{
+public:
+    CPacket():sHead(0), nLength(0), sCmd(0), sSum(0) {}  //
+    CPacket(const CPacket& pack) {
+		sHead = pack.sHead;
+		nLength = pack.nLength;
+		sCmd = pack.sCmd;
+		strData = pack.strData;
+		sSum = pack.sSum;
+    }
+    CPacket& operator=(const CPacket& pack) {
+        if (this != &pack) {
+            sHead = pack.sHead;
+            nLength = pack.nLength;
+            sCmd = pack.sCmd;
+            strData = pack.strData;
+            sSum = pack.sSum;
+        }
+        return *this;
+    }
+
+    CPacket(const BYTE* pData, size_t nSize) {                 //从数据块中解析出数据包
+        size_t i = 0;
+        for (; i < nSize; i++) {
+            if (*(WORD*)(pData + i) == 0xFEFF){
+                sHead = *(WORD*)(pData + i);
+                i += 2;
+                break;
+            }
+        }
+
+		if (i + 8 > nSize) {             //包头+包长度+命令字+校验和最小8字节，包未完整接收，解析失败
+            nSize = 0;
+            return; 
+        }
+
+		nLength = *(DWORD*)(pData + i);i += 4;
+		if (nLength + i > nSize) {              //包未完整接收，解析失败
+            nSize = 0;
+            return;
+        }
+
+        sCmd = *(WORD*)(pData + i);i += 2;
+
+        if (nLength > 4) {
+            strData.resize(nLength - 4);
+            memcpy((void*)strData.c_str(), pData + i, nLength - 4);
+			i += (nLength - 4);
+        }
+        
+        sSum = *(WORD*)(pData + i); i += 2;
+
+        WORD sum = 0;
+        for (size_t j = 0; j < strData.size(); j++)
+        {
+            sum += BYTE(strData[j]) & 0xFF;
+        }
+
+        if (sum == sSum) {
+            nSize = i;
+            return;
+        }
+        nSize = 0;
+    }
+
+    ~CPacket() {}
+
+
+public:
+	WORD sHead;   //包头
+	DWORD nLength;  //包长度（从控制命令开始到和校验结束）
+	WORD sCmd;   //命令字
+	std::string strData; //数据体
+	WORD sSum;  //校验和
+
+};
