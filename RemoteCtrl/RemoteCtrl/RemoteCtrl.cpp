@@ -18,6 +18,38 @@ CWinApp theApp;
 
 using namespace std;
 
+void Dump(BYTE* pData, size_t nSize)
+{
+    std::string strOut;
+    for (size_t i = 0; i < nSize; i++)
+    {
+        char buf[8] = "";
+        if (i > 0 && (i % 16 == 0)) strOut += "\n";
+        snprintf(buf, sizeof(buf), "%02X ", pData[i] & 0xFF);
+        strOut += buf;
+    }
+    strOut += "\n";
+    OutputDebugStringA(strOut.c_str());
+}
+
+int MakeDriverInfo() {
+    std::string result;
+    for (int i = 1; i <= 26; i++) {
+        if (_chdrive(i) == 0) {
+            if (result.size() > 0)
+                result += ',';
+            result += 'A' + i - 1;
+        }
+    }
+    CPacket pack(1, (BYTE*)result.c_str(), result.size());
+    Dump((BYTE*)pack.Data(), pack.Size());
+
+    return 0;
+}
+
+
+//CServerSocket::getInstance()->Send(CPacket());
+
 int main()
 {
     int nRetCode = 0;
@@ -53,7 +85,7 @@ int main()
                 }
             }
             int ret = pserver->DealCommand();*/
-            
+            MakeDriverInfo();
 			
         }
     }
