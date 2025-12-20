@@ -119,6 +119,20 @@ public:
 #pragma pack(pop)
 
 
+
+typedef struct MouseEvent{
+    MouseEvent() {
+        nAction = 0;
+        nButton = -1;
+        ptXY.x = 0;
+        ptXY.y = 0;
+    }
+    WORD nAction;    // 操作类型：点击、移动、双击等
+    WORD nButton;    // 鼠标按键：左键、右键、中键等
+    POINT ptXY;      // 鼠标坐标
+} MOUSEEV, * PMOUSEEV;
+
+
 class CServerSocket
 {
 public:
@@ -189,6 +203,14 @@ public:
     bool GetFilePath(std::string& strPath) {
         if ((m_packet.sCmd >= 2)&&(m_packet.sCmd<=4)){
             strPath = m_packet.strData;
+            return true;
+        }
+        return false;
+    }
+
+    bool GetMouseEvent(MOUSEEV& mouse) {
+        if (m_packet.sCmd == 5) {
+            memcpy(&mouse, m_packet.strData.c_str(), sizeof(MOUSEEV));
             return true;
         }
         return false;
