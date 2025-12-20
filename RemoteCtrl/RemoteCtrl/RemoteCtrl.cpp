@@ -5,7 +5,7 @@
 #include "framework.h"
 #include "RemoteCtrl.h"
 #include "ServerSocket.h"
-
+#include <direct.h>
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -36,7 +36,7 @@ int main()
         else
         {
            
-            CServerSocket* pserver = CServerSocket::getInstance();
+            /*CServerSocket* pserver = CServerSocket::getInstance();
             int count = 0;
             if (pserver->InitSocket() == false) {
                 MessageBox(NULL, _T("网络初始化异常，未能成功初始hi，请检查网络状态！"), _T("网络初始化失败"), MB_OK | MB_ICONERROR);
@@ -52,7 +52,7 @@ int main()
                     count++;
                 }
             }
-            int ret = pserver->DealCommand();
+            int ret = pserver->DealCommand();*/
             
 			
         }
