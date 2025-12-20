@@ -7,7 +7,7 @@
 #include "ServerSocket.h"
 #include <direct.h>
 #include <io.h>
-
+#include <atlimage.h>
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -169,7 +169,7 @@ int MouseEvent() {
             nFlags = 8;
             break;
         }
-        if (nFlags != 8) { SetCursorPos(mouse.ptXY.x, mouse.ptXY.y); }
+        if (nFlags != 8) { SetCursorPos(mouse.ptXY.x, mouse.ptXY.y); }  //瞬间把鼠标光标定位到屏幕的 (x,y) 坐标位置
 
         switch (mouse.nAction)
         {
@@ -244,7 +244,7 @@ int MouseEvent() {
             break;
         }
 
-        CPacket pack(4, NULL, 0);
+        CPacket pack(5, NULL, 0);
         CServerSocket::getInstance()->Send(pack);
     }
     else {
@@ -254,6 +254,42 @@ int MouseEvent() {
     return 0;
 }
 
+int SendScreen() {
+    CImage screen;    //存储屏幕截图的图像
+    HDC hScreen= ::GetDC(NULL);   //获取整个屏幕的设备上下文
+    int nBitPerPixel=GetDeviceCaps(hScreen, BITSPIXEL);
+    int nWidth=GetDeviceCaps(hScreen, HORZRES);
+    int nHeight=GetDeviceCaps(hScreen, VERTRES);
+    screen.Create(nWidth, nHeight, nBitPerPixel);  //创建和屏幕尺寸、颜色深度一致的图像对象，用于存放截图
+
+    BitBlt(screen.GetDC(),0,0,2560,1550, hScreen,0,0,SRCCOPY); //将屏幕DC的内容拷贝到screen的DC中
+    ReleaseDC(NULL, hScreen);
+
+    HGLOBAL hMem= GlobalAlloc(GMEM_MOVEABLE,0);  //分配可移动的全局内存块（用于存储PNG格式的图像数据）
+    if (hMem == NULL) {return -1;}
+
+    IStream* pStream = NULL;     // 内存流对象，用于将图像保存为PNG
+    HRESULT ret= CreateStreamOnHGlobal(hMem, TRUE, &pStream);   //创建基于全局内存的流对象（后续将图像写入该流）
+    if (ret == S_OK)
+    {
+        screen.Save(pStream, Gdiplus::ImageFormatPNG);  // 将screen中的截图保存到内存流中，流的 “读取指针” 会停在数据末尾
+
+        LARGE_INTEGER bg = { 0 };  // 将流的读取指针重置到起始位置（准备读取流中的PNG数据）
+        pStream->Seek(bg,STREAM_SEEK_SET, NULL);
+
+        PBYTE pData=(PBYTE)GlobalLock(hMem);  // 锁定全局内存块，获取PNG数据的起始指针
+        SIZE_T nSize = GlobalSize(hMem);  // 获取全局内存块的大小（即PNG图像数据的总字节数）
+        CPacket pack(6, pData, nSize);
+        CServerSocket::getInstance()->Send(pack);
+
+        GlobalUnlock(hMem);
+
+    }
+    pStream->Release();  //释放资源
+    GlobalFree(hMem);
+    screen.ReleaseDC();
+    return 0;
+}
 
 int main()
 {
@@ -292,7 +328,7 @@ int main()
             int ret = pserver->DealCommand();*/
 
 
-            int nCmd = 1;
+            int nCmd = 6;
             switch (nCmd) {
             case 1://查看磁盘分区
                 MakeDriverInfo();
@@ -308,6 +344,9 @@ int main()
                 break;
             case 5:
                 MouseEvent();
+                break;
+            case 6:
+                SendScreen();
                 break;
             }
 			
