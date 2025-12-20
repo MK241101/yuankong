@@ -27,7 +27,7 @@ public:
         }
         return *this;
     }
-    CPacket(WORD nCmd, const BYTE* pData, size_t nSize) {
+    CPacket(WORD nCmd, const BYTE* pData, size_t nSize) {     //打包数据
         sHead = 0xFEFF;
         nLength = nSize + 4;
         sCmd = nCmd;
@@ -39,6 +39,7 @@ public:
             sSum += BYTE(strData[j]) & 0xFF;
         }
     }
+
     CPacket(const BYTE* pData, size_t nSize) {                 //从数据块中解析出数据包
         size_t i = 0;
         for (; i < nSize; i++) {
@@ -172,7 +173,19 @@ public:
     bool Send(const char* pData, int nSize) {
         if (m_client == -1) { return false; }
         return send(m_client, pData, nSize, 0) > 0;
-    
+    }
+
+    bool Send(CPacket& pack) {
+        if (m_client == -1) return false;
+        return send(m_client, pack.Data(), pack.Size(), 0) > 0;
+    }
+
+    bool GetFilePath(std::string& strPath) {
+        if (m_packet.sCmd == 2) {
+            strPath = m_packet.strData;
+            return true;
+        }
+        return false;
     }
 
 private:
