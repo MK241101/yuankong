@@ -65,7 +65,7 @@ typedef struct file_info{
 }FILEINFO, *PFILEINFO;
 
 int MakeDirectoryInfo() {
-    std::string strPath;
+    std::string strPath;  //存储要查询的目标目录路径
     
     if (CServerSocket::getInstance()->GetFilePath(strPath) == false) {
         OutputDebugString(_T("当前的命令，不是获取文件列表，命令解析错误！！"));
@@ -77,7 +77,7 @@ int MakeDirectoryInfo() {
         finfo.IsInvalid = TRUE;
         finfo.IsDirectory = TRUE;
         finfo.HasNext = FALSE;
-        memcpy(finfo.szFileName, strPath.c_str(), strPath.size());
+        memcpy(finfo.szFileName, strPath.c_str(), strPath.size());  //把目标目录路径拷贝到FILEINFO的文件名字段；
         
         CPacket pack(2, (BYTE*)&finfo, sizeof(finfo));
         CServerSocket::getInstance()->Send(pack);
@@ -85,14 +85,14 @@ int MakeDirectoryInfo() {
         return -2;
     }
 
-    _finddata_t fdata;
+    _finddata_t fdata;       //遍历目录下的文件 / 文件夹
     int hfind = 0;
     if ((hfind = _findfirst("*", &fdata)) == -1) {
         OutputDebugString(_T("没有找到任何文件！！"));
         return -3;
     }
-
-    do {
+     
+    do {                  //循环发送所有文件 / 文件夹信息
         FILEINFO finfo;
         finfo.IsDirectory = (fdata.attrib & _A_SUBDIR)!=0;
         memcpy(finfo.szFileName,fdata.name, strlen(fdata.name));
@@ -101,13 +101,54 @@ int MakeDirectoryInfo() {
 
     } while (!_findnext(hfind, &fdata));
 
-    FILEINFO finfo;
+    FILEINFO finfo;           //发送 “遍历结束” 标记
     finfo.HasNext=FALSE;
     CPacket pack(2, (BYTE*)&finfo, sizeof(finfo));
     CServerSocket::getInstance()->Send(pack);
 
     return 0;
 }
+
+
+int RunFile() {
+    std::string strPath;
+    CServerSocket::getInstance()->GetFilePath(strPath);
+    ShellExecuteA(NULL, NULL, strPath.c_str(), NULL, NULL, SW_SHOWNORMAL);
+    CPacket pack(3, NULL, 0);
+    CServerSocket::getInstance()->Send(pack);
+    return 0;
+}
+
+int DownloadFile() {
+    std::string strPath;
+    CServerSocket::getInstance()->GetFilePath(strPath);
+    long long data = 0;
+    FILE* pFile = fopen(strPath.c_str(), "rb");
+    if (pFile == NULL) {
+        CPacket pack(4, (BYTE*)&data, 8);
+        CServerSocket::getInstance()->Send(pack);
+        return -1;
+    }
+
+
+    fseek(pFile, 0, SEEK_END);
+    data = _ftelli64(pFile);
+    CPacket head(4,(BYTE*)&data,8);
+    fseek(pFile, 0, SEEK_SET);
+
+    char buffer[1024] = "";
+    size_t rlen = 0;
+    do {
+        rlen=fread(buffer, 1, 1024, pFile);
+        CPacket pack(4, (BYTE*)buffer, rlen);
+        CServerSocket::getInstance()->Send(pack);
+
+    } while (rlen >= 1024);
+    CPacket pack(4, NULL, 0);
+    CServerSocket::getInstance()->Send(pack);
+    fclose(pFile);
+}
+
 
 int main()
 {
@@ -153,6 +194,12 @@ int main()
                 break;
             case 2://查看指定目录下的文件
                 MakeDirectoryInfo();
+                break;
+            case 3://打开文件
+                RunFile();
+                break;
+            case 4://下载文件
+                DownloadFile();
                 break;
             }
 			
