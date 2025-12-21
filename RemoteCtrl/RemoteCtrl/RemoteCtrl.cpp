@@ -295,31 +295,72 @@ int SendScreen() {
 }
 
 CLockDialog dlg;
+unsigned threadid= 0;
 
-int LockMachine() {
-    dlg.Create(IDD_DIALOG_INFO, NULL);
+unsigned __stdcall threadLockDlg(void* arg)
+{
+    TRACE("%s(%d):%d\r\n", __FUNCTION__, __LINE__, GetCurrentThreadId());
+    dlg.Create(IDD_DIALOG_INFO, NULL);  //创建非模态对话框
     dlg.ShowWindow(SW_SHOW);
-    dlg.SetWindowPos(&dlg.wndTopMost, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+
+    CRect rect;
+    rect.left = 0;
+    rect.right = GetSystemMetrics(SM_CXFULLSCREEN);
+    rect.top = 0;
+    rect.bottom = GetSystemMetrics(SM_CYFULLSCREEN);
+    rect.bottom *= 1.03;
+
+    dlg.MoveWindow(rect);  //设置对话框大小
+    //dlg.SetWindowPos(&dlg.wndTopMost, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);  //设置对话框为置顶窗口（始终在所有窗口最上层）
+
+    ::ShowWindow(::FindWindow(_T("Shell_TrayWnd"), NULL), SW_HIDE);  //隐藏任务栏
+
+    ClipCursor(rect);  //限制鼠标活动范围，使鼠标只能在对话框内活动
+
     MSG msg;
-    while (GetMessage(&msg, NULL, 0, 0)) {
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
+    while (GetMessage(&msg, NULL, 0, 0)) {  //自定义消息循环：持续获取并处理系统消息，直到ESC键被按下
+        TranslateMessage(&msg);   // 翻译虚拟键消息（如将WM_KEYDOWN转为字符消息）
+        DispatchMessage(&msg);    //将消息分发到对应的窗口过程函数
         if (msg.message == WM_KEYDOWN) {
-            if (msg.wParam == VK_ESCAPE) {   //按下ESC键 退出
+            if (msg.wParam == VK_ESCAPE) {   //监听键盘按下消息，判断是否为ESC键
                 break;
             }
         }
     }
+
+    ::ShowWindow(::FindWindow(_T("Shell_TrayWnd"), NULL), SW_SHOW);  //恢复任务栏
     dlg.DestroyWindow();
+
+    _endthreadex(0);
     return 0;
 }
 
-int UnlockMachine() {
+int LockMachine() {
+    if ((dlg.m_hWnd == NULL) || (dlg.m_hWnd == INVALID_HANDLE_VALUE)) {
+        _beginthreadex(NULL,0,threadLockDlg,NULL, 0, &threadid);
+        TRACE("Thread ID: %d\n", threadid);
 
+    }
+    CPacket pack(7, NULL, 0);
+    CServerSocket::getInstance()->Send(pack);
     return 0;
 
 }
 
+int UnlockMachine()
+{
+    //dlg.SendMessage(WM_KEYDOWN, VK_ESCAPE, 0x01E0001);  
+    //::SendMessage(dlg.m_hWnd, WM_KEYDOWN, VK_ESCAPE, 0x01E0001);
+
+    /*
+    * 解锁的时候，上面两种方法都不可行，必须要根据线程ID发送消息，并不是说根据窗口句柄发送消息
+    * 因为MFC有基类，基类本质是一个线程，当使用上面的那两种方法的时候，没有对应的线程，所有MFC窗口不会响应
+    */
+    PostThreadMessage(threadid, WM_KEYDOWN, VK_ESCAPE, 0);  //向线程发送消息，模拟按下ESC键
+    CPacket pack(7, NULL, 0);
+    CServerSocket::getInstance()->Send(pack);
+    return 0;
+}
 
 int main()
 {
@@ -385,7 +426,11 @@ int main()
                 UnlockMachine();
                 break;
             }
-			
+            Sleep(5000);
+            UnlockMachine();
+            while (dlg.m_hWnd != NULL) {
+                Sleep(10);
+            }
         }
     }
     else
