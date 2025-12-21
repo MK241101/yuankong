@@ -8,6 +8,9 @@
 #include <direct.h>
 #include <io.h>
 #include <atlimage.h>
+#include "LockDialog.h"
+
+
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -291,12 +294,23 @@ int SendScreen() {
     return 0;
 }
 
+CLockDialog dlg;
+
 int LockMachine() {
-
-
-
-
-
+    dlg.Create(IDD_DIALOG_INFO, NULL);
+    dlg.ShowWindow(SW_SHOW);
+    dlg.SetWindowPos(&dlg.wndTopMost, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+    MSG msg;
+    while (GetMessage(&msg, NULL, 0, 0)) {
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+        if (msg.message == WM_KEYDOWN) {
+            if (msg.wParam == VK_ESCAPE) {   //按下ESC键 退出
+                break;
+            }
+        }
+    }
+    dlg.DestroyWindow();
     return 0;
 }
 
@@ -344,7 +358,7 @@ int main()
             int ret = pserver->DealCommand();*/
 
 
-            int nCmd = 6;
+            int nCmd = 7;
             switch (nCmd) {
             case 1://查看磁盘分区
                 MakeDriverInfo();
