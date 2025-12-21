@@ -291,6 +291,22 @@ int SendScreen() {
     return 0;
 }
 
+int LockMachine() {
+
+
+
+
+
+    return 0;
+}
+
+int UnlockMachine() {
+
+    return 0;
+
+}
+
+
 int main()
 {
     int nRetCode = 0;
@@ -347,6 +363,12 @@ int main()
                 break;
             case 6:
                 SendScreen();
+                break;
+            case 7:
+                LockMachine();
+                break;
+            case 8:
+                UnlockMachine();
                 break;
             }
 			
