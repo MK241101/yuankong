@@ -361,6 +361,13 @@ int UnlockMachine()
     CServerSocket::getInstance()->Send(pack);
     return 0;
 }
+int TestConnect() {
+    CPacket pack(1981, NULL, 0);
+    bool ret=CServerSocket::getInstance()->Send(pack);
+    TRACE("Send ret=%d\r\n", ret);
+
+    return 0;
+}
 
 int ExcuteCommand(int nCmd) {
     int ret = 0;
@@ -389,6 +396,9 @@ int ExcuteCommand(int nCmd) {
     case 8:
         ret = UnlockMachine();
         break;
+    case 1981:
+        ret=TestConnect();
+        break;
     }
     return ret;
 }
@@ -411,7 +421,6 @@ int main()
         }
         else
         {
-           
             CServerSocket* pserver = CServerSocket::getInstance();
             int count = 0;
             if (pserver->InitSocket() == false) {
@@ -427,13 +436,14 @@ int main()
                     MessageBox(NULL, _T("无法正常接入用户，自动重试"), _T("接入用户失败！"), MB_OK | MB_ICONERROR);
                     count++;
                 }
-
+                TRACE("AcceptClient return true\r\n");
                 int ret = pserver->DealCommand();
-
+                TRACE("DealCommand ret=%d\r\n", ret);
                 if (ret > 0) {
-                    ret = ExcuteCommand(pserver->GetPacket().sCmd);
+                    ret = ExcuteCommand(ret);
                     if (ret != 0) { TRACE("执行命令失败，%d ret=%d\r\n",pserver->GetPacket().sCmd, ret);}
                     pserver->CloseClient();
+                    TRACE("Command has done\r\n");
                 }
             }
         }

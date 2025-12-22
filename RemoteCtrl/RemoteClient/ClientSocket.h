@@ -3,6 +3,7 @@
 #include <string>
 #include "pch.h"
 #include "framework.h"
+#include <vector>
 
 #pragma pack(push)
 #pragma pack(1)
@@ -47,7 +48,7 @@ public:
         }
     }
 
-    CPacket(const BYTE* pData, size_t nSize) {                 //从数据块中解析出数据包
+    CPacket(const BYTE* pData, size_t& nSize) {                 //从数据块中解析出数据包
         size_t i = 0;
         for (; i < nSize; i++) {
             if (*(WORD*)(pData + i) == 0xFEFF) {
@@ -151,7 +152,9 @@ public:
     }
 
     bool InitSocket(const std::string& strIPAddress) {
-
+        if(m_sock!=INVALID_SOCKET) { CloseSocket(); }
+        m_sock = socket(PF_INET, SOCK_STREAM, 0);
+        if(m_sock == -1) { return false; }
         sockaddr_in serv_addr;
         memset(&serv_addr, 0, sizeof(serv_addr));
         serv_addr.sin_family = AF_INET;
@@ -175,7 +178,7 @@ public:
     
     int DealCommand() {
         if (m_sock == -1) { return -1; }
-        char* buffer = new char[BUFFER_SIZE];
+        char* buffer = m_buffer.data();
         memset(buffer, 0, BUFFER_SIZE);
         size_t index = 0;
         while (true) {
@@ -201,6 +204,7 @@ public:
     }
 
     bool Send(CPacket& pack) {
+        TRACE("m_sock = %d\r\n", m_sock);
         if (m_sock == -1) return false;
         return send(m_sock, pack.Data(), pack.Size(), 0) > 0;
     }
@@ -221,18 +225,28 @@ public:
         return false;
     }
 
+    CPacket GetPacket() {
+        return m_packet;
+    }
+
+    void CloseSocket() {
+        closesocket(m_sock);
+        m_sock=INVALID_SOCKET;
+    }
+
+
 private:
     CClientSocket(const CClientSocket& ss) {
         m_sock = ss.m_sock;
     };
     CClientSocket& operator=(const CClientSocket& ss) {};
+    
     CClientSocket() {
-
         if (InitSockEnv() == FALSE) {
             MessageBox(NULL, _T("初始化Socket环境失败"), _T("初始化错误"), MB_OK | MB_ICONERROR);
             exit(0);
         }
-        m_sock = socket(PF_INET, SOCK_STREAM, 0);
+        m_buffer.resize(BUFFER_SIZE);
     };
 
     ~CClientSocket() {
@@ -271,8 +285,9 @@ private:
     static CClientSocket* m_instance;
 
     SOCKET m_sock;
- 
     CPacket m_packet;
+
+    std::vector<char> m_buffer;
 };
 
 
