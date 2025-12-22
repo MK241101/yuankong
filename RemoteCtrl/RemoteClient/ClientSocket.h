@@ -136,20 +136,8 @@ typedef struct MouseEvent {
 
 //把 Windows 网络编程中（WSA）的数字错误码（比如 10060 表示连接超时、10061 表示连接被拒绝），
 //转换成人类可读的文本描述
-std::string GetErrorInfo(int wsaErrCode)
-{
-    std::string ret;                       // 存储最终返回的错误描述字符串
-    LPVOID lpMsgBuf = NULL;
-    FormatMessage(    // 标志位：FROM_SYSTEM表示从系统消息表获取；ALLOCATE_BUFFER表示自动分配缓冲区
-        FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_ALLOCATE_BUFFER,
-        NULL,
-        wsaErrCode,              // 要查询的错误码（WSA错误码）
-        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-        (LPTSTR)&lpMsgBuf, 0, NULL);
-    ret = (char*)lpMsgBuf;
-    LocalFree(lpMsgBuf);
-    return ret;
-}
+std::string GetErrInfo(int wsaErrCode);
+
 
 class CClientSocket
 {
@@ -178,7 +166,7 @@ public:
 
         if (ret == -1) {
             AfxMessageBox("连接服务器失败");
-            TRACE("连接服务器失败：%d %s\r\n",WSAGetLastError(),GetErrorInfo(WSAGetLastError()).c_str());
+            TRACE("连接服务器失败：%d %s\r\n",WSAGetLastError(),GetErrInfo(WSAGetLastError()).c_str());
             return false;
         }
         return true;

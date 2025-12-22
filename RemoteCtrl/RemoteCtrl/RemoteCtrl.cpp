@@ -362,6 +362,38 @@ int UnlockMachine()
     return 0;
 }
 
+int ExcuteCommand(int nCmd) {
+    int ret = 0;
+    switch (nCmd) {
+    case 1://查看磁盘分区
+        ret = MakeDriverInfo();
+        break;
+    case 2://查看指定目录下的文件
+        ret = MakeDirectoryInfo();
+        break;
+    case 3://打开文件
+        ret = RunFile();
+        break;
+    case 4://下载文件
+        ret = DownloadFile();
+        break;
+    case 5:
+        ret = MouseEvent();
+        break;
+    case 6:
+        ret = SendScreen();
+        break;
+    case 7:
+        ret = LockMachine();
+        break;
+    case 8:
+        ret = UnlockMachine();
+        break;
+    }
+    return ret;
+}
+
+
 int main()
 {
     int nRetCode = 0;
@@ -380,7 +412,7 @@ int main()
         else
         {
            
-            /*CServerSocket* pserver = CServerSocket::getInstance();
+            CServerSocket* pserver = CServerSocket::getInstance();
             int count = 0;
             if (pserver->InitSocket() == false) {
                 MessageBox(NULL, _T("网络初始化异常，未能成功初始hi，请检查网络状态！"), _T("网络初始化失败"), MB_OK | MB_ICONERROR);
@@ -395,41 +427,14 @@ int main()
                     MessageBox(NULL, _T("无法正常接入用户，自动重试"), _T("接入用户失败！"), MB_OK | MB_ICONERROR);
                     count++;
                 }
-            }
-            int ret = pserver->DealCommand();*/
 
+                int ret = pserver->DealCommand();
 
-            int nCmd = 7;
-            switch (nCmd) {
-            case 1://查看磁盘分区
-                MakeDriverInfo();
-                break;
-            case 2://查看指定目录下的文件
-                MakeDirectoryInfo();
-                break;
-            case 3://打开文件
-                RunFile();
-                break;
-            case 4://下载文件
-                DownloadFile();
-                break;
-            case 5:
-                MouseEvent();
-                break;
-            case 6:
-                SendScreen();
-                break;
-            case 7:
-                LockMachine();
-                break;
-            case 8:
-                UnlockMachine();
-                break;
-            }
-            Sleep(5000);
-            UnlockMachine();
-            while (dlg.m_hWnd != NULL) {
-                Sleep(10);
+                if (ret > 0) {
+                    ret = ExcuteCommand(pserver->GetPacket().sCmd);
+                    if (ret != 0) { TRACE("执行命令失败，%d ret=%d\r\n",pserver->GetPacket().sCmd, ret);}
+                    pserver->CloseClient();
+                }
             }
         }
     }
