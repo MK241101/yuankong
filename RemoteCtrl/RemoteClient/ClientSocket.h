@@ -3,6 +3,8 @@
 #include <string>
 #include "pch.h"
 #include "framework.h"
+#include <vector>
+
 
 #pragma pack(push)
 #pragma pack(1)
@@ -178,7 +180,7 @@ public:
     
     int DealCommand() {
         if (m_sock == -1) { return -1; }
-        char* buffer = new char[BUFFER_SIZE];
+        char* buffer = m_buffer.data();
         memset(buffer, 0, BUFFER_SIZE);
         size_t index = 0;
         while (true) {
@@ -192,9 +194,11 @@ public:
             if (len > 0) {
                 memmove(buffer, buffer + len, BUFFER_SIZE - len);
                 index -= len;
+                
                 return m_packet.sCmd;
             }
         }
+        
         return -1;
     }
 
@@ -243,7 +247,7 @@ private:
             MessageBox(NULL, _T("初始化Socket环境失败"), _T("初始化错误"), MB_OK | MB_ICONERROR);
             exit(0);
         }
-        
+        m_buffer.resize(BUFFER_SIZE);
     };
 
     ~CClientSocket() {
@@ -283,7 +287,7 @@ private:
 
     SOCKET m_sock;
     CPacket m_packet;
-
+    std::vector<char> m_buffer;
 };
 
 
