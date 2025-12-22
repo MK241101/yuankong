@@ -44,11 +44,12 @@ int MakeDriverInfo() {
             if (result.size() > 0)
                 result += ',';
             result += 'A' + i - 1;
+            
         }
     }
     CPacket pack(1, (BYTE*)result.c_str(), result.size());
     Dump((BYTE*)pack.Data(), pack.Size());
-    //CServerSocket::getInstance()->Send(pack);
+    CServerSocket::getInstance()->Send(pack);
 
     return 0;
 }
