@@ -47,7 +47,7 @@ public:
         }
     }
 
-    CPacket(const BYTE* pData, size_t nSize) {                 //从数据块中解析出数据包
+    CPacket(const BYTE* pData, size_t& nSize) {                 //从数据块中解析出数据包
         size_t i = 0;
         for (; i < nSize; i++) {
             if (*(WORD*)(pData + i) == 0xFEFF) {
@@ -151,6 +151,9 @@ public:
     }
 
     bool InitSocket(const std::string& strIPAddress) {
+        if (m_sock != INVALID_SOCKET) { CloseSocket(); }
+        m_sock = socket(PF_INET, SOCK_STREAM, 0);
+        if (m_sock == -1) { return false; }
 
         sockaddr_in serv_addr;
         memset(&serv_addr, 0, sizeof(serv_addr));
@@ -220,6 +223,14 @@ public:
         }
         return false;
     }
+    CPacket GetPacket() {
+        return m_packet;
+
+    }
+    void CloseSocket() {
+        closesocket(m_sock);
+        m_sock=INVALID_SOCKET;
+    }
 
 private:
     CClientSocket(const CClientSocket& ss) {
@@ -232,7 +243,7 @@ private:
             MessageBox(NULL, _T("初始化Socket环境失败"), _T("初始化错误"), MB_OK | MB_ICONERROR);
             exit(0);
         }
-        m_sock = socket(PF_INET, SOCK_STREAM, 0);
+        
     };
 
     ~CClientSocket() {
@@ -271,8 +282,8 @@ private:
     static CClientSocket* m_instance;
 
     SOCKET m_sock;
- 
     CPacket m_packet;
+
 };
 
 

@@ -160,10 +160,12 @@ public:
 
     bool AcceptClient()
     {
+        TRACE("enter AcceptClient\r\n");
         sockaddr_in client_adr;
 		int cli_sz = sizeof(client_adr);
         m_client = accept(m_sock, (sockaddr*)&client_adr, &cli_sz);
-       
+        TRACE("m_client=%d\r\n", m_client);
+        if (m_client == -1) { return false; }
 		return true;    
 
     }
