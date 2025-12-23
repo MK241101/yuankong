@@ -13,6 +13,7 @@
 #endif
 
 
+
 // 用于应用程序“关于”菜单项的 CAboutDlg 对话框
 
 class CAboutDlg : public CDialogEx
@@ -66,7 +67,7 @@ void CRemoteClientDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, IDC_TREE_DIR, m_Tree);
 }
 
-int CRemoteClientDlg::SendCommandPacket(int nCmd, BYTE* pData, int nLength)
+int CRemoteClientDlg::SendCommandPacket(int nCmd, bool bAutoClose, BYTE* pData, int nLength)
 {
 	UpdateData();
 	CClientSocket* pClient = CClientSocket::getInstance();
@@ -82,7 +83,8 @@ int CRemoteClientDlg::SendCommandPacket(int nCmd, BYTE* pData, int nLength)
 	int cmd = pClient->DealCommand();
 	TRACE("ack:%d\n", cmd);
 
-	pClient->CloseSocket();
+	if (bAutoClose) { pClient->CloseSocket(); }
+	
 	return cmd;
 }
 
@@ -92,6 +94,7 @@ BEGIN_MESSAGE_MAP(CRemoteClientDlg, CDialogEx)
 	ON_WM_QUERYDRAGICON()
 	ON_BN_CLICKED(IDC_BTN_TEST, &CRemoteClientDlg::OnBnClickedBtnTest)
 	ON_BN_CLICKED(IDC_BTN_FILEINFO, &CRemoteClientDlg::OnBnClickedBtnFileinfo)
+	ON_NOTIFY(NM_DBLCLK, IDC_TREE_DIR, &CRemoteClientDlg::OnNMDblclkTreeDir)
 END_MESSAGE_MAP()
 
 
@@ -212,4 +215,41 @@ void CRemoteClientDlg::OnBnClickedBtnFileinfo()
 		}
 		dr += drivers[i];
 	}
+}
+
+// 根据树形控件的节点句柄，递归向上拼接完整路径（从根节点到当前节点）
+CString CRemoteClientDlg::GetPath(HTREEITEM hTree) {
+	CString strRet, strTmp;
+	do {
+		strTmp = m_Tree.GetItemText(hTree);   // 获取当前节点的文本（文件夹/文件名称）
+		strRet = strTmp+ '\\' + strRet;       // 拼接路径：当前节点名称 + 反斜杠 + 已拼接的上级路径
+		hTree = m_Tree.GetParentItem(hTree);  // 获取当前节点的父节点句柄，继续向上遍历
+	}while(hTree != NULL);
+	return strRet;
+}
+
+// 树形控件（文件夹目录）的双击事件处理函数
+void CRemoteClientDlg::OnNMDblclkTreeDir(NMHDR* pNMHDR, LRESULT* pResult)
+{
+	*pResult = 0;
+
+	CPoint ptMouse;                            // 定义鼠标坐标变量
+    GetCursorPos(&ptMouse);                    // 获取鼠标在屏幕坐标系下的位置
+	m_Tree.ScreenToClient(&ptMouse);           // 将屏幕坐标转换为树形控件的客户区坐标（控件内部坐标）
+
+	HTREEITEM hTreeSelected=m_Tree.HitTest(ptMouse,0);  //检测鼠标双击位置对应的树形节点句柄
+	if(hTreeSelected==NULL) return;            // 如果双击位置没有节点（空白处），直接返回
+	CString strPath = GetPath(hTreeSelected);  // 调用GetPath函数，获取双击节点的完整路径
+	int nCmd=SendCommandPacket(2,false,(BYTE*)(LPCTSTR)strPath,strPath.GetLength()); //发送命令包：命令码2，路径字符串作为数据
+	PFILEINFO pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().Data();  //处理服务端返回的文件信息
+	CClientSocket* pClient = CClientSocket::getInstance();
+
+	while (pInfo->HasNext) {     // 循环处理后续数据包
+		int cmd=pClient->DealCommand();
+		TRACE("ack:%d\n", cmd);
+	}
+
+	pClient->CloseSocket();
+
+
 }

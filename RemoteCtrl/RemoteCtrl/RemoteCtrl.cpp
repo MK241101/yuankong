@@ -54,19 +54,7 @@ int MakeDriverInfo() {
     return 0;
 }
 
-typedef struct file_info{
-    file_info() {
-        IsInvalid = FALSE;
-        IsDirectory = -1;
-        HasNext = TRUE;
-        memset(szFileName, 0, sizeof(szFileName));
-    }
-    BOOL IsInvalid;   //是否有效
-    BOOL IsDirectory;   //是否是目录
-    BOOL HasNext;   //是否有下一个
-    char szFileName[256];  //文件名
 
-}FILEINFO, *PFILEINFO;
 
 int MakeDirectoryInfo() {
     std::string strPath;  //存储要查询的目标目录路径

@@ -135,6 +135,20 @@ typedef struct MouseEvent {
     POINT ptXY;      // 鼠标坐标
 } MOUSEEV, * PMOUSEEV;
 
+typedef struct file_info {
+    file_info() {
+        IsInvalid = FALSE;
+        IsDirectory = -1;
+        HasNext = TRUE;
+        memset(szFileName, 0, sizeof(szFileName));
+    }
+    BOOL IsInvalid;   //是否有效
+    BOOL IsDirectory;   //是否是目录
+    BOOL HasNext;   //是否有下一个
+    char szFileName[256];  //文件名
+
+}FILEINFO, * PFILEINFO;
+
 
 //把 Windows 网络编程中（WSA）的数字错误码（比如 10060 表示连接超时、10061 表示连接被拒绝），
 //转换成人类可读的文本描述
