@@ -66,10 +66,7 @@ int MakeDirectoryInfo() {
 
     if (_chdir(strPath.c_str()) != 0) {
         FILEINFO finfo;
-        finfo.IsInvalid = TRUE;
-        finfo.IsDirectory = TRUE;
         finfo.HasNext = FALSE;
-        memcpy(finfo.szFileName, strPath.c_str(), strPath.size());  //把目标目录路径拷贝到FILEINFO的文件名字段；
         
         CPacket pack(2, (BYTE*)&finfo, sizeof(finfo));
         CServerSocket::getInstance()->Send(pack);
@@ -81,6 +78,10 @@ int MakeDirectoryInfo() {
     int hfind = 0;
     if ((hfind = _findfirst("*", &fdata)) == -1) {
         OutputDebugString(_T("没有找到任何文件！！"));
+        FILEINFO finfo;           //发送 “遍历结束” 标记
+        finfo.HasNext = FALSE;
+        CPacket pack(2, (BYTE*)&finfo, sizeof(finfo));
+        CServerSocket::getInstance()->Send(pack);
         return -3;
     }
      
@@ -88,6 +89,7 @@ int MakeDirectoryInfo() {
         FILEINFO finfo;
         finfo.IsDirectory = (fdata.attrib & _A_SUBDIR)!=0;
         memcpy(finfo.szFileName,fdata.name, strlen(fdata.name));
+        TRACE("%s\r\n", finfo.szFileName);
         CPacket pack(2, (BYTE*)&finfo, sizeof(finfo));
         CServerSocket::getInstance()->Send(pack);
 
@@ -297,7 +299,7 @@ unsigned __stdcall threadLockDlg(void* arg)
     rect.right = GetSystemMetrics(SM_CXFULLSCREEN);
     rect.top = 0;
     rect.bottom = GetSystemMetrics(SM_CYFULLSCREEN);
-    rect.bottom *= 1.03;
+    rect.bottom = LONG(rect.bottom*1.03);
 
     dlg.MoveWindow(rect);  //设置对话框大小
     //dlg.SetWindowPos(&dlg.wndTopMost, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);  //设置对话框为置顶窗口（始终在所有窗口最上层）
