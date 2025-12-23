@@ -65,6 +65,7 @@ void CRemoteClientDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_IPAddress(pDX, IDC_IPADDRESS_serv, m_server_address);
 	DDX_Text(pDX, IDC_EDIT_PORT, m_nPort);
 	DDX_Control(pDX, IDC_TREE_DIR, m_Tree);
+	DDX_Control(pDX, IDC_LIST_FILE, m_List);
 }
 
 
@@ -97,6 +98,8 @@ BEGIN_MESSAGE_MAP(CRemoteClientDlg, CDialogEx)
 	ON_BN_CLICKED(IDC_BTN_TEST, &CRemoteClientDlg::OnBnClickedBtnTest)
 	ON_BN_CLICKED(IDC_BTN_FILEINFO, &CRemoteClientDlg::OnBnClickedBtnFileinfo)
 	ON_NOTIFY(NM_DBLCLK, IDC_TREE_DIR, &CRemoteClientDlg::OnNMDblclkTreeDir)
+	ON_NOTIFY(NM_CLICK, IDC_TREE_DIR, &CRemoteClientDlg::OnNMClickTreeDir)
+	ON_NOTIFY(NM_RCLICK, IDC_LIST_FILE, &CRemoteClientDlg::OnNMRClickListFile)
 END_MESSAGE_MAP()
 
 
@@ -220,6 +223,51 @@ void CRemoteClientDlg::OnBnClickedBtnFileinfo()
 	}
 }
 
+void CRemoteClientDlg::LoadFileInfo()
+{
+	CPoint ptMouse;                            // 定义鼠标坐标变量
+	GetCursorPos(&ptMouse);                    // 获取鼠标在屏幕坐标系下的位置
+	m_Tree.ScreenToClient(&ptMouse);           // 将屏幕坐标转换为树形控件的客户区坐标（控件内部坐标）
+	HTREEITEM hTreeSelected = m_Tree.HitTest(ptMouse, 0);  //检测鼠标双击位置对应的树形节点句柄
+	if (hTreeSelected == NULL) return;            // 如果双击位置没有节点（空白处），直接返回
+	if (m_Tree.GetChildItem(hTreeSelected) == NULL) return;  // 如果双击的节点没有子节点，直接返回
+	DeleteTreeChildrenItem(hTreeSelected);  // 删除当前节点的所有子节点
+
+	m_List.DeleteAllItems();
+	CString strPath = GetPath(hTreeSelected);  // 调用GetPath函数，获取双击节点的完整路径
+	int nCmd = SendCommandPacket(2, false, (BYTE*)(LPCTSTR)strPath, strPath.GetLength()); //发送命令包：命令码2，路径字符串作为数据
+
+	PFILEINFO pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().strData.c_str();  //处理服务端返回的文件信息
+	CClientSocket* pClient = CClientSocket::getInstance();
+
+	while (pInfo->HasNext) {
+		TRACE("[%s] isdir %d\r\n", pInfo->szFileName, pInfo->IsDirectory);
+		if (pInfo->IsDirectory) {
+			if ((CString(pInfo->szFileName) == ".") || (CString(pInfo->szFileName) == "..")) {
+				int cmd = pClient->DealCommand();
+				TRACE("ack:%d\n", cmd);
+				if (cmd < 0) { break; }
+				pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().strData.c_str();
+				continue;
+			}
+			HTREEITEM hTemp = m_Tree.InsertItem(pInfo->szFileName, hTreeSelected, TVI_LAST);  // 将文件名插入到树形控件中
+			m_Tree.InsertItem("", hTemp, TVI_LAST);
+
+		}
+		else {
+			m_List.InsertItem(0, pInfo->szFileName);
+		
+		}
+		
+		int cmd = pClient->DealCommand();
+		TRACE("ack:%d\n", cmd);
+		if (cmd < 0) { break; }
+		pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().strData.c_str();
+	}
+
+	pClient->CloseSocket();
+}
+
 // 根据树形控件的节点句柄，递归向上拼接完整路径（从根节点到当前节点）
 CString CRemoteClientDlg::GetPath(HTREEITEM hTree) {
 
@@ -245,43 +293,39 @@ void CRemoteClientDlg::DeleteTreeChildrenItem(HTREEITEM hTree)
 void CRemoteClientDlg::OnNMDblclkTreeDir(NMHDR* pNMHDR, LRESULT* pResult)
 {
 	*pResult = 0;
+	LoadFileInfo();
+}
 
-	CPoint ptMouse;                            // 定义鼠标坐标变量
-    GetCursorPos(&ptMouse);                    // 获取鼠标在屏幕坐标系下的位置
-	m_Tree.ScreenToClient(&ptMouse);           // 将屏幕坐标转换为树形控件的客户区坐标（控件内部坐标）
-	HTREEITEM hTreeSelected=m_Tree.HitTest(ptMouse,0);  //检测鼠标双击位置对应的树形节点句柄
-	if(hTreeSelected==NULL) return;            // 如果双击位置没有节点（空白处），直接返回
-	if(m_Tree.GetChildItem(hTreeSelected) == NULL) return;  // 如果双击的节点没有子节点，直接返回
-	DeleteTreeChildrenItem(hTreeSelected);  // 删除当前节点的所有子节点
+void CRemoteClientDlg::OnNMClickTreeDir(NMHDR* pNMHDR, LRESULT* pResult)
+{
+	*pResult = 0;
+	LoadFileInfo();
+}
 
-	CString strPath = GetPath(hTreeSelected);  // 调用GetPath函数，获取双击节点的完整路径
-	int nCmd=SendCommandPacket(2,false,(BYTE*)(LPCTSTR)strPath,strPath.GetLength()); //发送命令包：命令码2，路径字符串作为数据
+void CRemoteClientDlg::OnNMRClickListFile(NMHDR* pNMHDR, LRESULT* pResult)
+{
+	LPNMITEMACTIVATE pNMItemActivate = reinterpret_cast<LPNMITEMACTIVATE>(pNMHDR);
+	*pResult = 0;
+
+	CPoint ptMouse,ptList;
+	GetCursorPos(&ptMouse);
+	ptList = ptMouse;
+	m_List.ScreenToClient(&ptList);
+	int ListSelected = m_List.HitTest(ptList);
+	if (ListSelected < 0)return;
+	CMenu menu;
+	menu.LoadMenu(IDR_MENU_RCLICK);
+	CMenu* pPupup = menu.GetSubMenu(0);
+	if (pPupup == NULL) {
+		pPupup->TrackPopupMenu(TPM_LEFTALIGN|TPM_RIGHTBUTTON, ptMouse.x, ptMouse.y, this);
 	
-	PFILEINFO pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().strData.c_str();  //处理服务端返回的文件信息
-	CClientSocket* pClient = CClientSocket::getInstance();
-
-	while (pInfo->HasNext) {   
-		TRACE("[%s] isdir %d\r\n", pInfo->szFileName, pInfo->IsDirectory);
-		if (pInfo->IsDirectory) {
-			if ((CString(pInfo->szFileName) == ".") || (CString(pInfo->szFileName) == "..")){
-				int cmd = pClient->DealCommand();
-				TRACE("ack:%d\n", cmd);
-				if (cmd < 0) { break; }
-				pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().strData.c_str();
-				continue;
-			}
-		}
-		HTREEITEM hTemp = m_Tree.InsertItem(pInfo->szFileName, hTreeSelected, TVI_LAST);  // 将文件名插入到树形控件中
-		if (pInfo->IsDirectory) {
-			m_Tree.InsertItem("", hTemp, TVI_LAST);
-		}  
-		int cmd=pClient->DealCommand();
-		TRACE("ack:%d\n", cmd);
-		if (cmd < 0) { break; }
-		pInfo=(PFILEINFO)CClientSocket::getInstance()->GetPacket().strData.c_str();
 	}
 
-	pClient->CloseSocket();
+
+
+
+
+
 
 
 }

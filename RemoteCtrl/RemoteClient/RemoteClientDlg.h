@@ -11,7 +11,7 @@ class CRemoteClientDlg : public CDialogEx
 // 构造
 public:
 	CRemoteClientDlg(CWnd* pParent = nullptr);	// 标准构造函数
-	CString GetPath(HTREEITEM hTree);
+	
 
 // 对话框数据
 #ifdef AFX_DESIGN_TIME
@@ -22,7 +22,9 @@ public:
 	virtual void DoDataExchange(CDataExchange* pDX);	// DDX/DDV 支持
 
 private:
+	void LoadFileInfo();
 
+	CString GetPath(HTREEITEM hTree);
 	void DeleteTreeChildrenItem(HTREEITEM hItem);
 
 	//1 查看磁盘分区
@@ -50,4 +52,8 @@ public:
 	afx_msg void OnBnClickedBtnFileinfo();
 	CTreeCtrl m_Tree;
 	afx_msg void OnNMDblclkTreeDir(NMHDR* pNMHDR, LRESULT* pResult);
+	afx_msg void OnNMClickTreeDir(NMHDR* pNMHDR, LRESULT* pResult);
+	// 显示文件
+	CListCtrl m_List;
+	afx_msg void OnNMRClickListFile(NMHDR* pNMHDR, LRESULT* pResult);
 };
