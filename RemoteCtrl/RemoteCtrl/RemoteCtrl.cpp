@@ -356,11 +356,26 @@ int UnlockMachine()
 
 int TestConnect() {
     CPacket pack(1981, NULL, 0);
-    CServerSocket::getInstance()->Send(pack);
+    bool ret= CServerSocket::getInstance()->Send(pack);
+    TRACE("Send ret=%d\r\n", ret);
     return 0;
-
-
 }
+
+int DeleteLocalFile() {
+
+    std::string strPath;     //存储要下载的文件路径
+    CServerSocket::getInstance()->GetFilePath(strPath);
+    TCHAR sPath[MAX_PATH] =_T("");
+    MultiByteToWideChar(CP_ACP, 0, strPath.c_str(), strPath.size(), sPath, sizeof(sPath) / sizeof(TCHAR));
+    DeleteFileA(strPath.c_str());
+    CPacket pack(9, NULL, 0);
+    bool ret = CServerSocket::getInstance()->Send(pack);
+    TRACE("Send ret=%d\r\n", ret);
+
+    return 0;
+    
+}
+
 int ExcuteCommand(int nCmd) {
     int ret = 0;
     switch (nCmd) {
@@ -388,6 +403,8 @@ int ExcuteCommand(int nCmd) {
     case 8:
         ret = UnlockMachine();
         break;
+    case 9:
+        ret = DeleteLocalFile();
     case 1981:
         ret=TestConnect();
         break;

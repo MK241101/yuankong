@@ -226,6 +226,31 @@ void CRemoteClientDlg::OnBnClickedBtnFileinfo()
 	}
 }
 
+void CRemoteClientDlg::LoadFileCurrent()
+{
+	HTREEITEM hTree= m_Tree.GetSelectedItem();  //获取树形控件中当前选中的节点（要加载的目标目录）
+	CString strPath = GetPath(hTree);  // 调用GetPath函数，获取双击节点的完整路径
+
+	m_List.DeleteAllItems();    //清空列表控件原有所有项（避免旧数据残留）
+	int nCmd = SendCommandPacket(2, false, (BYTE*)(LPCTSTR)strPath, strPath.GetLength()); //发送命令包：命令码2，路径字符串作为数据
+
+	PFILEINFO pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().strData.c_str();  //处理服务端返回的文件信息
+	CClientSocket* pClient = CClientSocket::getInstance();
+
+	while (pInfo->HasNext) {       // 循环解析服务端返回的文件信息
+		TRACE("[%s] isdir %d\r\n", pInfo->szFileName, pInfo->IsDirectory);
+		if (!pInfo->IsDirectory) {   // 仅将“非目录”的文件插入列表控件
+			m_List.InsertItem(0, pInfo->szFileName);
+		}
+
+		int cmd = pClient->DealCommand();
+		TRACE("ack:%d\n", cmd);
+		if (cmd < 0) { break; }
+		pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().strData.c_str();
+	}
+	pClient->CloseSocket();
+}
+
 void CRemoteClientDlg::LoadFileInfo()
 {
 	CPoint ptMouse;                            // 定义鼠标坐标变量
@@ -376,10 +401,33 @@ void CRemoteClientDlg::OnDownloadFile()
 
 void CRemoteClientDlg::OnDeleteFile()
 {
-	
+	HTREEITEM hSelevted = m_Tree.GetSelectedItem();     //获取树形控件中选中的节点
+	CString strPath = GetPath(hSelevted);        //获取树形控件中选中的节点路径
+	int nSelected = m_List.GetSelectionMark();      //获取列表控件中选中项的索引
+	CString strFile = m_List.GetItemText(nSelected, 0);   //从列表控件中获取选中项的文件名
+	strFile = strPath + strFile;
+
+	int ret = SendCommandPacket(9, false, (BYTE*)(LPCTSTR)strFile, strFile.GetLength());
+	if (ret < 0) {
+		AfxMessageBox("删除文件命令失败！！");
+	}
+	LoadFileCurrent();   //重新加载当前目录的文件列表（刷新列表，确认删除结果）
+
+
+
 }
 
 void CRemoteClientDlg::OnRunFile()
 {
-	
+	HTREEITEM hSelevted = m_Tree.GetSelectedItem();     //获取树形控件中选中的节点
+	CString strPath = GetPath(hSelevted);        //获取树形控件中选中的节点路径
+	int nSelected = m_List.GetSelectionMark();      //获取列表控件中选中项的索引
+	CString strFile = m_List.GetItemText(nSelected, 0);   //从列表控件中获取选中项的文件名
+	strFile = strPath + strFile;
+
+    int ret = SendCommandPacket(3, false, (BYTE*)(LPCTSTR)strFile, strFile.GetLength());
+	if (ret < 0) {
+		AfxMessageBox("打开文件命令失败！！");
+	}
+
 }
