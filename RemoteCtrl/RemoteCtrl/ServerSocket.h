@@ -46,7 +46,7 @@ public:
         }
     }
 
-    CPacket(const BYTE* pData, size_t nSize) {                 //从数据块中解析出数据包
+    CPacket(const BYTE* pData, size_t& nSize) {                 //从数据块中解析出数据包
         size_t i = 0;
         for (; i < nSize; i++) {
             if (*(WORD*)(pData + i) == 0xFEFF) {
@@ -72,7 +72,7 @@ public:
         if (nLength > 4) {
             strData.resize(nLength - 4);
             memcpy((void*)strData.c_str(), pData + i, nLength - 4);
-            i += (nLength - 4);
+            i += nLength - 4;
         }
 
         sSum = *(WORD*)(pData + i); i += 2;
@@ -163,7 +163,7 @@ public:
         sockaddr_in serv_addr, client_adr;
         memset(&serv_addr, 0, sizeof(serv_addr));
         serv_addr.sin_family = AF_INET;
-        serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+        serv_addr.sin_addr.s_addr = INADDR_ANY;
         serv_addr.sin_port = htons(9527);
 
         bind(m_sock, (sockaddr*)&serv_addr, sizeof(serv_addr));

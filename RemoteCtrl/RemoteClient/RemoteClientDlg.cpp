@@ -100,6 +100,9 @@ BEGIN_MESSAGE_MAP(CRemoteClientDlg, CDialogEx)
 	ON_NOTIFY(NM_DBLCLK, IDC_TREE_DIR, &CRemoteClientDlg::OnNMDblclkTreeDir)
 	ON_NOTIFY(NM_CLICK, IDC_TREE_DIR, &CRemoteClientDlg::OnNMClickTreeDir)
 	ON_NOTIFY(NM_RCLICK, IDC_LIST_FILE, &CRemoteClientDlg::OnNMRClickListFile)
+	ON_COMMAND(ID_DOWNLOAD_FILE, &CRemoteClientDlg::OnDownloadFile)
+	ON_COMMAND(ID_DELETE_FILE, &CRemoteClientDlg::OnDeleteFile)
+	ON_COMMAND(ID_RUN_FILE, &CRemoteClientDlg::OnRunFile)
 END_MESSAGE_MAP()
 
 
@@ -320,12 +323,63 @@ void CRemoteClientDlg::OnNMRClickListFile(NMHDR* pNMHDR, LRESULT* pResult)
 		pPupup->TrackPopupMenu(TPM_LEFTALIGN|TPM_RIGHTBUTTON, ptMouse.x, ptMouse.y, this);
 	
 	}
+}
 
+void CRemoteClientDlg::OnDownloadFile()
+{
+	int nListSelected = m_List.GetSelectionMark();      //获取列表控件中选中项的索引
+	CString strFile=m_List.GetItemText(nListSelected,0);   //从列表控件中获取选中项的文件名
+	CFileDialog dlg(FALSE, "*", strFile, OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT, NULL, this); // 创建文件保存对话框
+	
+	if (dlg.DoModal() == IDOK) {    //在保存对话框中点击“确定”
+		FILE* pFile = fopen(dlg.GetPathName(), "wb+");  //打开本地文件
+		if (pFile == NULL) {
+			AfxMessageBox("本地没有权限保存文件，或者文件无法创建！！");
+			return;
+		}
 
+		HTREEITEM hSelevted = m_Tree.GetSelectedItem();     //获取树形控件中选中的节点
+		CClientSocket* pClient = CClientSocket::getInstance();
+		do {
+			strFile = GetPath(hSelevted) + strFile;     // 拼接远程文件的完整路径（树形路径 + 列表文件名）
+			TRACE("%s\r\n", LPCSTR(strFile));
+			int ret = SendCommandPacket(4, false, (BYTE*)(LPCTSTR)strFile, strFile.GetLength());
+			if (ret < 0) {                             // 检查下载命令是否发送成功
+				AfxMessageBox("执行下载命令失败！！");
+				TRACE("执行下载失败：ret=%d\r\n", ret);
+				break;
+			}
+			//TODO: 为什么这里GetPacket().strData返回的是文件总长度  strData应该是数据内容吧
+			long long nLength = *(long long*)pClient->GetPacket().strData.c_str();  //读取服务端返回的文件总长度
+			if (nLength == 0) {
+				AfxMessageBox("文件长度为零或者无法读取文件！！");
+				break;
+			}
+			 
+			long long nCount = 0;            
+			while (nCount < nLength) {          // 循环接收文件数据，直到接收完所有内容
+				ret = pClient->DealCommand();
+				if (ret < 0) {
+					AfxMessageBox("传输失败！！");
+					TRACE("传输失败：ret=%d\r\n", ret);
+					break;
+				}
+				// 将接收到的数据包内容写入本地文件
+				fwrite(pClient->GetPacket().strData.c_str(), 1, pClient->GetPacket().strData.size(), pFile);
+				nCount += pClient->GetPacket().strData.size();
+			}
+		} while (false);
+		fclose(pFile);
+		pClient->CloseSocket();
+	}
+}
 
+void CRemoteClientDlg::OnDeleteFile()
+{
+	
+}
 
-
-
-
-
+void CRemoteClientDlg::OnRunFile()
+{
+	
 }

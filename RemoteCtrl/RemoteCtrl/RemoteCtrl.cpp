@@ -84,15 +84,15 @@ int MakeDirectoryInfo() {
         CServerSocket::getInstance()->Send(pack);
         return -3;
     }
-     
     do {                  //循环发送所有文件 / 文件夹信息
         FILEINFO finfo;
         finfo.IsDirectory = (fdata.attrib & _A_SUBDIR)!=0;
         memcpy(finfo.szFileName,fdata.name, strlen(fdata.name));
         TRACE("%s\r\n", finfo.szFileName);
         CPacket pack(2, (BYTE*)&finfo, sizeof(finfo));
-        CServerSocket::getInstance()->Send(pack);
-
+        bool ret = CServerSocket::getInstance()->Send(pack);
+        Dump((BYTE*)&finfo, sizeof(finfo));
+        TRACE("Send ret%d\r\n", ret);
     } while (!_findnext(hfind, &fdata));
 
     FILEINFO finfo;           //发送 “遍历结束” 标记
@@ -129,6 +129,7 @@ int DownloadFile() {
     fseek(pFile, 0, SEEK_END);  //把文件的读取指针移到文件末尾（目的是获取文件总长度）
     data = _ftelli64(pFile);    //获取当前读取指针的位置
     CPacket head(4,(BYTE*)&data,8);  //构造 “文件大小数据包”
+    CServerSocket::getInstance()->Send(head);
     fseek(pFile, 0, SEEK_SET);  //把文件的读取指针移到文件开头（目的是从文件开头开始读取文件）
 
     char buffer[1024] = "";    //分块读取并发送文件内容

@@ -251,7 +251,7 @@ public:
     }
 
 private:
-    CClientSocket(const CClientSocket& ss) {
+    CClientSocket(const CClientSocket& ss) :m_packet{} {
         m_sock = ss.m_sock;
     };
     CClientSocket& operator=(const CClientSocket& ss) {};
