@@ -45,6 +45,7 @@ int MakeDriverInfo() {
                 result += ',';
             result += 'A' + i - 1;
             
+            
         }
     }
     CPacket pack(1, (BYTE*)result.c_str(), result.size());
@@ -84,16 +85,19 @@ int MakeDirectoryInfo() {
         CServerSocket::getInstance()->Send(pack);
         return -3;
     }
+
+    int count = 0;
     do {                  //循环发送所有文件 / 文件夹信息
         FILEINFO finfo;
         finfo.IsDirectory = (fdata.attrib & _A_SUBDIR)!=0;
         memcpy(finfo.szFileName,fdata.name, strlen(fdata.name));
         TRACE("%s\r\n", finfo.szFileName);
         CPacket pack(2, (BYTE*)&finfo, sizeof(finfo));
-        bool ret = CServerSocket::getInstance()->Send(pack);
-        Dump((BYTE*)&finfo, sizeof(finfo));
-        TRACE("Send ret%d\r\n", ret);
+        CServerSocket::getInstance()->Send(pack);
+        count++;
+       
     } while (!_findnext(hfind, &fdata));
+    TRACE("server: count=%d\r\n", count);
 
     FILEINFO finfo;           //发送 “遍历结束” 标记
     finfo.HasNext=FALSE;

@@ -268,6 +268,7 @@ void CRemoteClientDlg::LoadFileInfo()
 	PFILEINFO pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().strData.c_str();  //处理服务端返回的文件信息
 	CClientSocket* pClient = CClientSocket::getInstance();
 
+	int Count = 0;
 	while (pInfo->HasNext) {
 		TRACE("[%s] isdir %d\r\n", pInfo->szFileName, pInfo->IsDirectory);
 		if (pInfo->IsDirectory) {
@@ -282,18 +283,17 @@ void CRemoteClientDlg::LoadFileInfo()
 			m_Tree.InsertItem("", hTemp, TVI_LAST);
 
 		}
-		else {
-			m_List.InsertItem(0, pInfo->szFileName);
+		else { m_List.InsertItem(0, pInfo->szFileName); }
 		
-		}
-		
+		Count++;
 		int cmd = pClient->DealCommand();
-		TRACE("ack:%d\n", cmd);
+		
 		if (cmd < 0) { break; }
 		pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().strData.c_str();
 	}
 
 	pClient->CloseSocket();
+	TRACE("Count=%d\r\n", Count);
 }
 
 // 根据树形控件的节点句柄，递归向上拼接完整路径（从根节点到当前节点）
