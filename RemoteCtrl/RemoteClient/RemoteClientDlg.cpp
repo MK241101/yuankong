@@ -68,8 +68,6 @@ void CRemoteClientDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, IDC_LIST_FILE, m_List);
 }
 
-
-
 int CRemoteClientDlg::SendCommandPacket(int nCmd, bool bAutoClose, BYTE* pData, int nLength)
 {
 	UpdateData();
@@ -146,7 +144,7 @@ BOOL CRemoteClientDlg::OnInitDialog()
 
 	m_dlgStatus.Create(IDD_DLG_STATUS, this);
 	m_dlgStatus.ShowWindow(SW_HIDE);
-
+	m_isFull = false;
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
 
@@ -226,6 +224,42 @@ void CRemoteClientDlg::OnBnClickedBtnFileinfo()
 		}
 		dr += drivers[i];
 	}
+}
+
+void CRemoteClientDlg::threadEntryForWatchData(void* arg)
+{
+	CRemoteClientDlg* thiz = (CRemoteClientDlg*)arg;
+	thiz->threadWatchData();
+	_endthread();
+}
+
+void CRemoteClientDlg::threadWatchData()
+{
+	CClientSocket* pClient = NULL;
+	do {
+		pClient = CClientSocket::getInstance();
+
+
+	} while (pClient == NULL);
+	
+	for (;;){
+		CPacket pack(6, NULL, 0);
+		bool ret = pClient->Send(pack);
+		if (ret) {
+			int cmd = pClient->DealCommand();  
+			if (cmd == 6) {
+				if (m_isFull == false) {
+					BYTE* pData = (BYTE*)pClient->GetPacket().strData.c_str();
+					
+					m_isFull = true;
+				}
+			}
+		}
+		else { Sleep(1); }
+	}
+
+
+
 }
 
 void CRemoteClientDlg::threadEntryForDownFile(void* arg)
