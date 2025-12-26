@@ -28,7 +28,7 @@ protected:
 public:
 	CImage& GetImage() { return m_image; }
 	bool isFull() const{ return m_isFull; }
-
+	void SetImageStatus(bool isFull=false) { m_isFull = isFull; }
 
 private:
 	CImage m_image;  //图片缓存

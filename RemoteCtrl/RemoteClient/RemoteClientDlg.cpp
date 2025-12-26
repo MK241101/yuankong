@@ -238,40 +238,41 @@ void CRemoteClientDlg::threadEntryForWatchData(void* arg)
 
 void CRemoteClientDlg::threadWatchData()
 {
+	Sleep(50);
 	CClientSocket* pClient = NULL;
 	do {
 		pClient = CClientSocket::getInstance();
 	} while (pClient == NULL);
 	
+	ULONGLONG tick=GetTickCount64();
+
 	for (;;){
-		CPacket pack(6, NULL, 0);   
-		bool ret = pClient->Send(pack);   // 向服务端发送"获取图片数据"的请求指令
-		if (ret) {
-			int cmd = pClient->DealCommand();    // 处理服务端返回的指令，获取返回的指令码
-			if (cmd == 6) {
-				if (m_isFull == false) {
-					BYTE* pData = (BYTE*)pClient->GetPacket().strData.c_str();  //获取返回的数据包数据
-					HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, 0);  //分配可移动的全局内存块
-					if (hMem == NULL) {
-						TRACE("内存不足了！");
-						Sleep(1);
-						continue;
-					}
-
-					IStream* pStream = NULL;
-					HRESULT hRet = CreateStreamOnHGlobal(hMem, TRUE, &pStream);  //创建基于全局内存的IStream流对象
-					if (hRet == S_OK) {
-						ULONG length = 0;
-                        pStream->Write(pData, pClient->GetPacket().strData.size(), &length); //将Socket接收的二进制图片数据写入流中
-						LARGE_INTEGER bg = { 0 };        // 设置流的读取位置到起始处（确保图片加载时从开头读取）
-                        pStream->Seek(bg, STREAM_SEEK_SET, NULL);
-
-						m_image.Load(pStream);  // 将流中的图片数据加载到m_image对象
-						m_isFull = true;
-					}
-
+		if (m_isFull == false) {
+			int ret=SendMessage(WM_SEND_PACKET, 6<<1|1);
+			if (ret==6) {
+				BYTE* pData = (BYTE*)pClient->GetPacket().strData.c_str();  //获取返回的数据包数据
+				HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, 0);  //分配可移动的全局内存块
+				if (hMem == NULL) {
+					TRACE("内存不足了！");
+					Sleep(1);
+					continue;
 				}
+
+				IStream* pStream = NULL;
+				HRESULT hRet = CreateStreamOnHGlobal(hMem, TRUE, &pStream);  //创建基于全局内存的IStream流对象
+				if (hRet == S_OK) {
+					ULONG length = 0;
+					pStream->Write(pData, pClient->GetPacket().strData.size(), &length); //将Socket接收的二进制图片数据写入流中
+					LARGE_INTEGER bg = { 0 };        // 设置流的读取位置到起始处（确保图片加载时从开头读取）
+					pStream->Seek(bg, STREAM_SEEK_SET, NULL);
+
+					m_image.Load(pStream);  // 将流中的图片数据加载到m_image对象
+					m_isFull = true;
+				}
+
 			}
+			
+			else { Sleep(1); }
 		}
 		else { Sleep(1); }
 	}
@@ -514,15 +515,28 @@ void CRemoteClientDlg::OnRunFile()
 
 LRESULT CRemoteClientDlg::OnSendPacket(WPARAM wParam, LPARAM lParam)
 {
-	CString strFile = (LPCSTR)lParam;
-	int ret = SendCommandPacket(wParam >> 1, wParam & 1, (BYTE*)(LPCSTR)strFile, strFile.GetLength());
+	int ret = 0;
+	int cmd = wParam >> 1;
+	switch (cmd) {
+	case 4:
+		{
+			CString strFile=(LPCSTR)lParam;
+			ret = SendCommandPacket(cmd, wParam & 1, (BYTE*)(LPCSTR)strFile, strFile.GetLength());
+		}
+		break;
+	case 6:
+		ret=SendCommandPacket(cmd,wParam & 1);
+		break;
+    default:
+		ret = -1;
+	}
 	return ret;
 }
 
 void CRemoteClientDlg::OnBnClickedBtnStartWatch()
 {
-	_beginthread(CRemoteClientDlg::threadEntryForWatchData, 0, this);
 	CWatchDialog dlg(this);
+	_beginthread(CRemoteClientDlg::threadEntryForWatchData, 0, this);
 	dlg.DoModal();
 
 }

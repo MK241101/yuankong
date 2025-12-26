@@ -8,7 +8,7 @@
 
 #pragma pack(push)
 #pragma pack(1)
-#define BUFFER_SIZE 4096
+#define BUFFER_SIZE 409600
 class CPacket   //数据包结构
 {
 public:
@@ -49,7 +49,7 @@ public:
         }
     }
 
-    CPacket(const BYTE* pData, size_t& nSize) {                 //从数据块中解析出数据包
+    CPacket(const BYTE* pData, size_t& nSize) {
         size_t i = 0;
         for (; i < nSize; i++) {
             if (*(WORD*)(pData + i) == 0xFEFF) {
@@ -58,37 +58,30 @@ public:
                 break;
             }
         }
-
-        if (i + 8 > nSize) {             //包头+包长度+命令字+校验和最小8字节，包未完整接收，解析失败
+        if (i + 4 + 2 + 2 > nSize) {//包数据可能不全，或者包头未能全部接收到
             nSize = 0;
             return;
         }
-
         nLength = *(DWORD*)(pData + i); i += 4;
-        if (nLength + i > nSize) {              //包未完整接收，解析失败
+        if (nLength + i > nSize) {//包未完全接收到，就返回，解析失败
             nSize = 0;
             return;
         }
-
         sCmd = *(WORD*)(pData + i); i += 2;
-
         if (nLength > 4) {
-            strData.resize(nLength - 4);
+            strData.resize(nLength - 2 - 2);
             memcpy((void*)strData.c_str(), pData + i, nLength - 4);
-            TRACE("%s\r\n", strData.c_str()+12);
-            i += (nLength - 4);
+            TRACE("%s\r\n", strData.c_str() + 12);
+            i += nLength - 4;
         }
-
         sSum = *(WORD*)(pData + i); i += 2;
-
         WORD sum = 0;
         for (size_t j = 0; j < strData.size(); j++)
         {
             sum += BYTE(strData[j]) & 0xFF;
         }
-
         if (sum == sSum) {
-            nSize = i;
+            nSize = i;//head2 length4 data...
             return;
         }
         nSize = 0;
