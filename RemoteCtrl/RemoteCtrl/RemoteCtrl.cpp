@@ -269,8 +269,7 @@ int SendScreen() {
 
     IStream* pStream = NULL;     // 内存流对象，用于将图像保存为PNG
     HRESULT ret= CreateStreamOnHGlobal(hMem, TRUE, &pStream);   //创建基于全局内存的流对象（后续将图像写入该流）
-    if (ret == S_OK)
-    {
+    if (ret == S_OK){
         screen.Save(pStream, Gdiplus::ImageFormatPNG);  // 将screen中的截图保存到内存流中，流的 “读取指针” 会停在数据末尾
 
         LARGE_INTEGER bg = { 0 };  // 将流的读取指针重置到起始位置（准备读取流中的PNG数据）
@@ -282,7 +281,6 @@ int SendScreen() {
         CServerSocket::getInstance()->Send(pack);
 
         GlobalUnlock(hMem);
-
     }
     pStream->Release();  //释放资源
     GlobalFree(hMem);

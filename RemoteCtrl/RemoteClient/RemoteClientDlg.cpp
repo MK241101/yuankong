@@ -11,6 +11,7 @@
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
+#include "CWatchDialog.h"
 
 
 
@@ -102,6 +103,8 @@ BEGIN_MESSAGE_MAP(CRemoteClientDlg, CDialogEx)
 	ON_COMMAND(ID_DELETE_FILE, &CRemoteClientDlg::OnDeleteFile)
 	ON_COMMAND(ID_RUN_FILE, &CRemoteClientDlg::OnRunFile)
 	ON_MESSAGE(WM_SEND_PACKET, &CRemoteClientDlg::OnSendPacket)
+	ON_BN_CLICKED(IDC_BTN_START_WATCH, &CRemoteClientDlg::OnBnClickedBtnStartWatch)
+	ON_WM_TIMER()
 END_MESSAGE_MAP()
 
 
@@ -238,27 +241,40 @@ void CRemoteClientDlg::threadWatchData()
 	CClientSocket* pClient = NULL;
 	do {
 		pClient = CClientSocket::getInstance();
-
-
 	} while (pClient == NULL);
 	
 	for (;;){
-		CPacket pack(6, NULL, 0);
-		bool ret = pClient->Send(pack);
+		CPacket pack(6, NULL, 0);   
+		bool ret = pClient->Send(pack);   // 向服务端发送"获取图片数据"的请求指令
 		if (ret) {
-			int cmd = pClient->DealCommand();  
+			int cmd = pClient->DealCommand();    // 处理服务端返回的指令，获取返回的指令码
 			if (cmd == 6) {
 				if (m_isFull == false) {
-					BYTE* pData = (BYTE*)pClient->GetPacket().strData.c_str();
-					
-					m_isFull = true;
+					BYTE* pData = (BYTE*)pClient->GetPacket().strData.c_str();  //获取返回的数据包数据
+					HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, 0);  //分配可移动的全局内存块
+					if (hMem == NULL) {
+						TRACE("内存不足了！");
+						Sleep(1);
+						continue;
+					}
+
+					IStream* pStream = NULL;
+					HRESULT hRet = CreateStreamOnHGlobal(hMem, TRUE, &pStream);  //创建基于全局内存的IStream流对象
+					if (hRet == S_OK) {
+						ULONG length = 0;
+                        pStream->Write(pData, pClient->GetPacket().strData.size(), &length); //将Socket接收的二进制图片数据写入流中
+						LARGE_INTEGER bg = { 0 };        // 设置流的读取位置到起始处（确保图片加载时从开头读取）
+                        pStream->Seek(bg, STREAM_SEEK_SET, NULL);
+
+						m_image.Load(pStream);  // 将流中的图片数据加载到m_image对象
+						m_isFull = true;
+					}
+
 				}
 			}
 		}
 		else { Sleep(1); }
 	}
-
-
 
 }
 
@@ -498,7 +514,22 @@ void CRemoteClientDlg::OnRunFile()
 
 LRESULT CRemoteClientDlg::OnSendPacket(WPARAM wParam, LPARAM lParam)
 {
-	CString strFile = (LPCTSTR)wParam;
-	int ret = SendCommandPacket(wParam >> 1, wParam & 1, (BYTE*)(LPCTSTR)strFile, strFile.GetLength());
+	CString strFile = (LPCSTR)lParam;
+	int ret = SendCommandPacket(wParam >> 1, wParam & 1, (BYTE*)(LPCSTR)strFile, strFile.GetLength());
 	return ret;
+}
+
+void CRemoteClientDlg::OnBnClickedBtnStartWatch()
+{
+	_beginthread(CRemoteClientDlg::threadEntryForWatchData, 0, this);
+	CWatchDialog dlg(this);
+	dlg.DoModal();
+
+}
+
+void CRemoteClientDlg::OnTimer(UINT_PTR nIDEvent)
+{
+	// TODO: 在此添加消息处理程序代码和/或调用默认值
+
+	CDialogEx::OnTimer(nIDEvent);
 }

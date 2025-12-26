@@ -22,8 +22,13 @@ public:
 	enum { IDD = IDD_REMOTECLIENT_DIALOG };
 #endif
 
-	protected:
+protected:
 	virtual void DoDataExchange(CDataExchange* pDX);	// DDX/DDV 支持
+
+public:
+	CImage& GetImage() { return m_image; }
+	bool isFull() const{ return m_isFull; }
+
 
 private:
 	CImage m_image;  //图片缓存
@@ -80,4 +85,6 @@ public:
 	afx_msg void OnDeleteFile();
 	afx_msg void OnRunFile();
     afx_msg LRESULT OnSendPacket(WPARAM wParam, LPARAM lParam);
+	afx_msg void OnBnClickedBtnStartWatch();
+	afx_msg void OnTimer(UINT_PTR nIDEvent);
 };
