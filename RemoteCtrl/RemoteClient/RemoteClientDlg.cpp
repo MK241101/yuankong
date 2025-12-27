@@ -141,7 +141,7 @@ BOOL CRemoteClientDlg::OnInitDialog()
 
 	// TODO: 在此添加额外的初始化代码
 	UpdateData();
-	m_server_address=0x7F000001;
+	m_server_address=0xC0A80A67;//192.168.10.103
 	m_nPort = _T("9527");
 	UpdateData(FALSE);
 
@@ -243,10 +243,8 @@ void CRemoteClientDlg::threadWatchData()
 	do {
 		pClient = CClientSocket::getInstance();
 	} while (pClient == NULL);
-	
-	ULONGLONG tick=GetTickCount64();
 
-	for (;;){
+	while(!m_isClosed){
 		if (m_isFull == false) {
 			int ret=SendMessage(WM_SEND_PACKET, 6<<1|1);
 			if (ret==6) {
@@ -266,7 +264,8 @@ void CRemoteClientDlg::threadWatchData()
 					LARGE_INTEGER bg = { 0 };        // 设置流的读取位置到起始处（确保图片加载时从开头读取）
 					pStream->Seek(bg, STREAM_SEEK_SET, NULL);
 
-					m_image.Load(pStream);  // 将流中的图片数据加载到m_image对象
+					if ((HBITMAP)m_image != NULL) { m_image.Destroy(); }
+					m_image.Load(pStream);               // 将流中的图片数据加载到m_image对象
 					m_isFull = true;
 				}
 
@@ -539,9 +538,12 @@ LRESULT CRemoteClientDlg::OnSendPacket(WPARAM wParam, LPARAM lParam)
 
 void CRemoteClientDlg::OnBnClickedBtnStartWatch()
 {
+	m_isClosed = false;
 	CWatchDialog dlg(this);
-	_beginthread(CRemoteClientDlg::threadEntryForWatchData, 0, this);
+	HANDLE hThread=(HANDLE)_beginthread(CRemoteClientDlg::threadEntryForWatchData, 0, this);
 	dlg.DoModal();
+	m_isClosed = true;
+	WaitForSingleObject(hThread, 500);
 
 }
 

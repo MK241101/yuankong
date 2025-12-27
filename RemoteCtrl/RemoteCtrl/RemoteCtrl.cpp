@@ -56,7 +56,6 @@ int MakeDriverInfo() {
 }
 
 
-
 int MakeDirectoryInfo() {
     std::string strPath;  //存储要查询的目标目录路径
     
@@ -263,7 +262,7 @@ int SendScreen() {
     int nHeight=GetDeviceCaps(hScreen, VERTRES);
     screen.Create(nWidth, nHeight, nBitPerPixel);  //创建和屏幕尺寸、颜色深度一致的图像对象，用于存放截图
 
-    BitBlt(screen.GetDC(),0,0,2560,1550, hScreen,0,0,SRCCOPY); //将屏幕DC的内容拷贝到screen的DC中
+    BitBlt(screen.GetDC(),0,0, nWidth, nHeight, hScreen,0,0,SRCCOPY); //将屏幕DC的内容拷贝到screen的DC中
     ReleaseDC(NULL, hScreen);
 
     HGLOBAL hMem= GlobalAlloc(GMEM_MOVEABLE,0);  //分配可移动的全局内存块（用于存储PNG格式的图像数据）
