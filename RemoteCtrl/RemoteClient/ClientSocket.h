@@ -8,7 +8,7 @@
 
 #pragma pack(push)
 #pragma pack(1)
-#define BUFFER_SIZE 409600
+#define BUFFER_SIZE 2048000
 class CPacket   //数据包结构
 {
 public:
