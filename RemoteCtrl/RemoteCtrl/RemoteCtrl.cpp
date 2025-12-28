@@ -303,10 +303,21 @@ unsigned __stdcall threadLockDlg(void* arg)
     rect.right = GetSystemMetrics(SM_CXFULLSCREEN);
     rect.top = 0;
     rect.bottom = GetSystemMetrics(SM_CYFULLSCREEN);
-    rect.bottom = LONG(rect.bottom*1.03);
+    rect.bottom = LONG(rect.bottom*1.10);
 
     dlg.MoveWindow(rect);  //设置对话框大小
-    //dlg.SetWindowPos(&dlg.wndTopMost, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);  //设置对话框为置顶窗口（始终在所有窗口最上层）
+    CWnd* pText = dlg.GetDlgItem(IDC_STATIC);
+    if (pText) {
+        CRect rtText;
+        pText->GetWindowRect(rtText);
+        int nWidth = rtText.Width();
+        int x=(rect.right - nWidth) / 2;
+        int nHeight=rtText.Height();
+        int y=(rect.bottom - nHeight) / 2;
+        pText->MoveWindow(x, y, rtText.Width(), rtText.Height());
+    }
+
+    dlg.SetWindowPos(&dlg.wndTopMost, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);  //设置对话框为置顶窗口（始终在所有窗口最上层）
 
     ::ShowWindow(::FindWindow(_T("Shell_TrayWnd"), NULL), SW_HIDE);  //隐藏任务栏
 
@@ -322,7 +333,7 @@ unsigned __stdcall threadLockDlg(void* arg)
             }
         }
     }
-
+    ClipCursor(NULL);
     ::ShowWindow(::FindWindow(_T("Shell_TrayWnd"), NULL), SW_SHOW);  //恢复任务栏
     dlg.DestroyWindow();
 
@@ -352,7 +363,7 @@ int UnlockMachine()
     * 因为MFC有基类，基类本质是一个线程，当使用上面的那两种方法的时候，没有对应的线程，所有MFC窗口不会响应
     */
     PostThreadMessage(threadid, WM_KEYDOWN, VK_ESCAPE, 0);  //向线程发送消息，模拟按下ESC键
-    CPacket pack(7, NULL, 0);
+    CPacket pack(8, NULL, 0);
     CServerSocket::getInstance()->Send(pack);
     return 0;
 }

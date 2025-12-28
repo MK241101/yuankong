@@ -141,7 +141,7 @@ BOOL CRemoteClientDlg::OnInitDialog()
 
 	// TODO: 在此添加额外的初始化代码
 	UpdateData();
-	m_server_address=0xC0A80A67;//192.168.10.103
+	m_server_address=0xC0A80A69;//192.168.10.105
 	m_nPort = _T("9527");
 	UpdateData(FALSE);
 
@@ -528,6 +528,8 @@ LRESULT CRemoteClientDlg::OnSendPacket(WPARAM wParam, LPARAM lParam)
 		}
 		  break;
 	case 6:
+	case 7:
+	case 8:
 			ret=SendCommandPacket(cmd,wParam & 1);
 			break;
     default:
