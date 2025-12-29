@@ -140,6 +140,7 @@
     <ClInclude Include="EdoyunTool.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="LockDialog.h" />
+    <ClInclude Include="Packet.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="RemoteCtrl.h" />
     <ClInclude Include="Resource.h" />
