@@ -2,7 +2,8 @@
 #include "ClientController.h"
 
 
-
+std::map<UINT, CClientController::MSGFUNC> CClientController::m_mapFunc;   //静态映射表：消息ID -> 对应的处理函数
+CClientController* CClientController::m_instance = NULL;   
 
 CClientController* CClientController::getInstance() {
 	if (m_instance == NULL) {
@@ -13,9 +14,9 @@ CClientController* CClientController::getInstance() {
 			{WM_SEND_DATA,&CClientController::OnSendData},
 			{WM_SHOW_STATUS,&CClientController::OnShowStatus},
 			{WM_SHOW_WATCH,&CClientController::OnShowWatcher},
-			{-1,NULL}
+			{(UINT)- 1,NULL}
 		};
-		for (int i = 0; MsgFuncs[i].func != NULL; i++) {
+		for (int i = 0; MsgFuncs[i].func != NULL; i++) {     // 遍历映射表，将消息和函数存入m_mapFunc（后续通过消息ID找函数）
 			m_mapFunc.insert(std::pair<UINT, MSGFUNC>(MsgFuncs[i].nMsg, MsgFuncs[i].func));
 		
 		}
@@ -24,49 +25,51 @@ CClientController* CClientController::getInstance() {
 	return nullptr;
 }
 
-int CClientController::InitController()
+int CClientController::InitController()   // 初始化控制器：创建工作线程（用于异步处理消息，避免阻塞UI）
 {
 	m_hThread = (HANDLE)_beginthreadex(NULL, 0, &CClientController::threadEntry, this, 0, &m_nThreadID);
+	m_statusDlg.Create(IDD_DLG_STATUS, &m_remoteDlg);
 	return 0;
 }
 
-
-int CClientController::Invoke(CWnd* pMainWin) {
+int CClientController::Invoke(CWnd* pMainWin) {   // 启动远程客户端主对话框
 	
 	pMainWin = &m_remoteDlg;
 	return m_remoteDlg.DoModal();
 
 }
 
-LRESULT CClientController::SendMessage(MSG msg)
+LRESULT CClientController::SendMessage(MSG msg)   // 异步发送消息到工作线程：核心接口
 {
-	UUID uuid;
-	UuidCreate(&uuid);
-	auto pr = m_mapMessage.insert(std::pair<UUID, MSG>(uuid, msg));
-
-	PostThreadMessage(m_nThreadID, WM_SEND_MESSAGE, (WPARAM)& pr.second, (LPARAM)&pr.first);
-	return LRESULT();
+	HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);  
+	if(hEvent==NULL) return -2;
+	MSGINFO info(msg);
+	PostThreadMessage(m_nThreadID, WM_SEND_MESSAGE, (WPARAM)&info, (LPARAM)hEvent);//异步发送消息到工作线程
+	
+	WaitForSingleObject(hEvent, -1);
+	
+	return info.result;
+	
 }
-
-void CClientController::threadFunc()
+   
+void CClientController::threadFunc()   //消息循环 + 消息分发处理
 {
 	MSG msg;
-	while (::GetMessage(&msg, NULL, 0, 0)) {
-		TranslateMessage(&msg);
-		DispatchMessage(&msg);
+	while (::GetMessage(&msg, NULL, 0, 0)) {  // 线程消息循环（GetMessage：阻塞等待消息，直到收到WM_QUIT）
+		TranslateMessage(&msg);       //处理键盘相关的 “硬件消息→字符消息” 转换
+		DispatchMessage(&msg);        // 分发消息
+		
 		if (msg.message == WM_SEND_MESSAGE) {
-			MSG* pmsg = (MSG*)msg.wParam;
-			UUID* puid = (UUID*)msg.lParam;
-			std::map<UINT, MSGFUNC>::iterator it = m_mapFunc.find(pmsg->message);
+			MSGINFO* pmsg = (MSGINFO*)msg.wParam; 
+			HANDLE hEvent = (HANDLE)msg.lParam;
+			std::map<UINT, MSGFUNC>::iterator it=m_mapFunc.find(msg.message);  
 			if (it != m_mapFunc.end()) {
-				(this->*it->second)(pmsg->message, pmsg->wParam, pmsg->lParam);
-				std::map<UUID, MSG>::iterator it = m_mapMessage.find(*puid);
-				if (it != m_mapMessage.end()) {
-					m_mapMessage.erase(*puid);
-				}
+				pmsg->result = (this->*it->second)(pmsg->msg.message, pmsg->msg.wParam, pmsg->msg.lParam);
 			}
+			else { pmsg->result = -1; }
+			SetEvent(hEvent); 
 		}
-		else {
+		else {  
 			std::map<UINT, MSGFUNC>::iterator it = m_mapFunc.find(msg.message);
 			if (it != m_mapFunc.end()) { (this->*it->second)(msg.message, msg.wParam, msg.lParam); }
 		}
@@ -77,8 +80,27 @@ unsigned __stdcall CClientController::threadEntry(void* arg) {
 
 	CClientController* thiz = (CClientController*)arg;
 	thiz->threadFunc();
-
-
 	_endthreadex(0);
 	return 0;
+}
+
+LRESULT CClientController::OnSendPack(UINT nMsg, WPARAM wParam, LPARAM lParam)
+{
+
+	return LRESULT();
+}
+
+LRESULT CClientController::OnSendData(UINT nMsg, WPARAM wParam, LPARAM lParam)
+{
+	return LRESULT();
+}
+
+LRESULT CClientController::OnShowStatus(UINT nMsg, WPARAM wParam, LPARAM lParam)
+{
+	return m_statusDlg.ShowWindow(SW_SHOW);
+}
+
+LRESULT CClientController::OnShowWatcher(UINT nMsg, WPARAM wParam, LPARAM lParam)
+{
+	return m_watchDlg.DoModal();
 }
