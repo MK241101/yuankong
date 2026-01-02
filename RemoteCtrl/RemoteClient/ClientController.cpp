@@ -1,6 +1,6 @@
 #include "pch.h"
 #include "ClientController.h"
-
+#include "ClientSocket.h"
 
 std::map<UINT, CClientController::MSGFUNC> CClientController::m_mapFunc;   //静态映射表：消息ID -> 对应的处理函数
 CClientController* CClientController::m_instance = NULL;   
@@ -59,17 +59,18 @@ void CClientController::threadFunc()   //消息循环 + 消息分发处理
 		TranslateMessage(&msg);       //处理键盘相关的 “硬件消息→字符消息” 转换
 		DispatchMessage(&msg);        // 分发消息
 		
-		if (msg.message == WM_SEND_MESSAGE) {
+		if (msg.message == WM_SEND_MESSAGE) {     // 处理通用转发消息（WM_SEND_MESSAGE）
 			MSGINFO* pmsg = (MSGINFO*)msg.wParam; 
-			HANDLE hEvent = (HANDLE)msg.lParam;
-			std::map<UINT, MSGFUNC>::iterator it=m_mapFunc.find(msg.message);  
+			HANDLE hEvent = (HANDLE)msg.lParam;    // 解析参数：消息信息指针 + 同步事件句柄
+
+			std::map<UINT, MSGFUNC>::iterator it=m_mapFunc.find(msg.message);    // 根据原始消息ID查找处理函数
 			if (it != m_mapFunc.end()) {
 				pmsg->result = (this->*it->second)(pmsg->msg.message, pmsg->msg.wParam, pmsg->msg.lParam);
 			}
 			else { pmsg->result = -1; }
-			SetEvent(hEvent); 
+			SetEvent(hEvent);        // 设置事件为有信号：通知主线程处理完成
 		}
-		else {  
+		else {             // 处理直接投递到线程的自定义消息（非转发）
 			std::map<UINT, MSGFUNC>::iterator it = m_mapFunc.find(msg.message);
 			if (it != m_mapFunc.end()) { (this->*it->second)(msg.message, msg.wParam, msg.lParam); }
 		}
@@ -86,13 +87,18 @@ unsigned __stdcall CClientController::threadEntry(void* arg) {
 
 LRESULT CClientController::OnSendPack(UINT nMsg, WPARAM wParam, LPARAM lParam)
 {
+	CClientSocket* pClient = CClientSocket::getInstance();
+	CPacket* pPacket = (CPacket*)wParam;
 
-	return LRESULT();
+	return pClient->Send(*pPacket);
 }
 
 LRESULT CClientController::OnSendData(UINT nMsg, WPARAM wParam, LPARAM lParam)
 {
-	return LRESULT();
+	CClientSocket* pClient = CClientSocket::getInstance();
+	char* pBuffer = (char*)wParam;
+
+	return pClient->Send(pBuffer,(int)lParam);
 }
 
 LRESULT CClientController::OnShowStatus(UINT nMsg, WPARAM wParam, LPARAM lParam)

@@ -5,7 +5,7 @@
 #include "StatusDlg.h"
 #include <map>
 #include"resource.h"
-
+#include"EdoyunTool.h"
 
 #define WM_SEND_PACK (WM_USER + 1)   //发送数据包
 #define WM_SEND_DATA (WM_USER + 2)   //发送数据
@@ -32,17 +32,67 @@ public:
 	int InitController();            //创建工作线程
 	int Invoke(CWnd* pMainWin);     //启动客户端主对话框
 	LRESULT SendMessage(MSG msg);   //异步发送消息到工作线程
+	void UpdateAddress(int nIP, int nPort) {
+		CClientSocket::getInstance()->UpdateAddress(nIP, nPort);
+	
+	}
+	
+	int DealCommand() {
+		return CClientSocket::getInstance()->DealCommand();
+	
+	}
+
+	void CloseSocket() {
+		CClientSocket::getInstance()->CloseSocket();
+	
+	}
+
+	bool SendPacket(const CPacket& pack) {
+
+		CClientSocket* pClient = CClientSocket::getInstance();
+		if (pClient->InitSocket() == false) return false;
+		pClient->Send(pack);
+
+	}
+
+	//1 查看磁盘分区
+	//2 查看指定目录下的文件
+	//3 打开文件
+	//4 下载文件
+	//5 鼠标操作
+	//6 发送屏幕内容
+	//7 锁机
+	//8 解锁
+	//9 删除文件
+	//1981 测试连接
+	//返回值：是命令号，如果小于0，则是错误
+	int SendCommandPacket(int nCmd, bool bAutoClose=true, BYTE* pData=NULL, size_t nLength=0) {
+		CClientSocket* pClient = CClientSocket::getInstance();
+		if (pClient->InitSocket() == false) return false;
+		pClient->Send(CPacket(nCmd, pData, nLength));
+		int cmd = DealCommand();
+		TRACE("ack:%d\r\n", cmd);
+		if (bAutoClose)
+			CloseSocket();
+		return cmd;
+	
+	}
+
+	int GetImage(CImage& image) {
+		CClientSocket* pClient = CClientSocket::getInstance();
+		return CEdoyunTool::Bytes2Image(image, pClient->GetPacket().strData);
+
+	}
+
 
 protected:
 	CClientController():
 		m_statusDlg(&m_remoteDlg), m_watchDlg(&m_remoteDlg) 
 	{
-		m_hThread = INVALID_HANDLE_VALUE;
-		m_nThreadID = -1;
+		m_hThread = INVALID_HANDLE_VALUE; // 初始化线程句柄为无效
+		m_nThreadID = -1;                 // 初始化线程ID为-1
 	}
 		
-
-	
 	~CClientController() {WaitForSingleObject(m_hThread, 100);}  //等待工作线程退出，避免线程泄漏
 
 	void threadFunc();           //工作线程的核心函数：消息循环 + 消息处理
@@ -63,10 +113,10 @@ protected:
 	LRESULT OnShowWatcher(UINT nMsg, WPARAM wParam, LPARAM lParam); // 处理“展示监控”消息
 
 private:
-	typedef struct MsgInfo{
-		MSG msg;
-		LRESULT result;
-		HANDLE hEvent;
+	typedef struct MsgInfo{     // 消息信息结构体：封装MSG、处理结果、事件（用于同步）
+		MSG msg;                // 原始消息
+		LRESULT result;			// 处理结果
+		HANDLE hEvent;			// 同步事件（用于等待处理完成）
 		MsgInfo(MSG m) {
 			result = 0;
 			memcpy(&msg, &m, sizeof(MSG));
