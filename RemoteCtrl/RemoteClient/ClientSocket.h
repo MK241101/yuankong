@@ -4,6 +4,9 @@
 #include "pch.h"
 #include "framework.h"
 #include <vector>
+#include<list>
+#include<map>
+
 
 
 #pragma pack(push)
@@ -19,6 +22,7 @@ public:
         sCmd = pack.sCmd;
         strData = pack.strData;
         sSum = pack.sSum;
+        hEvent = pack.hEvent;
     }
     CPacket& operator=(const CPacket& pack) {
         if (this != &pack) {
@@ -27,10 +31,12 @@ public:
             sCmd = pack.sCmd;
             strData = pack.strData;
             sSum = pack.sSum;
+            hEvent = pack.hEvent;
+
         }
         return *this;
     }
-    CPacket(WORD nCmd, const BYTE* pData, size_t nSize) {     //打包数据
+    CPacket(WORD nCmd, const BYTE* pData, size_t nSize,HANDLE hEvent) {     //打包数据
         sHead = 0xFEFF;
         nLength = nSize + 4;
         sCmd = nCmd;
@@ -47,9 +53,11 @@ public:
         {
             sSum += BYTE(strData[j]) & 0xFF;
         }
+        this->hEvent = hEvent;
+
     }
 
-    CPacket(const BYTE* pData, size_t& nSize) {
+    CPacket(const BYTE* pData, size_t& nSize):hEvent(INVALID_HANDLE_VALUE){
         size_t i = 0;
         for (; i < nSize; i++) {
             if (*(WORD*)(pData + i) == 0xFEFF) {
@@ -110,7 +118,7 @@ public:
     WORD sCmd;   //命令字
     std::string strData; //数据体
     WORD sSum;  //校验和
-   
+    HANDLE hEvent;   
 };
 
 #pragma pack(pop)
@@ -262,6 +270,8 @@ public:
         m_nPort = nPort;
     
     }
+
+
 private:
     CClientSocket(const CClientSocket& ss) {
         m_sock = ss.m_sock;
@@ -281,10 +291,17 @@ private:
 
     ~CClientSocket() {
         closesocket(m_sock);
-
+        m_sock = INVALID_SOCKET;
         WSACleanup();     // 清理 Winsock 库
 
     };
+
+
+
+
+    static void threadEntry(void* arg);
+
+    void threadFunc();
 
     BOOL InitSockEnv() {
         WSADATA data;
@@ -294,8 +311,6 @@ private:
         return TRUE;          // 成功初始化
 
     }
-
-
 
     static void releaseInstance() {
         TRACE("CClientSocket has called!!!\r\n");
@@ -322,6 +337,9 @@ private:
     std::vector<char> m_buffer;
     int m_nPort;
     int m_nIP;
+
+    std::map<HANDLE,std::list<CPacket>> m_mapAck;
+    std::list<CPacket> m_lstSend;
 };
 
 
