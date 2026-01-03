@@ -27,12 +27,9 @@ protected:
 
 public:
 	CImage& GetImage() { return m_image; }
-	bool isFull() const{ return m_isFull; }
-	void SetImageStatus(bool isFull=false) { m_isFull = isFull; }
 
 private:
 	CImage m_image;  //图片缓存
-	bool m_isFull;   //缓存区是否已满
 	bool m_isClosed; //监视是否关闭
 
 private:

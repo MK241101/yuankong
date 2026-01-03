@@ -157,6 +157,7 @@ public:
     static CClientSocket* getInstance() {
         if (m_instance == NULL) {
             m_instance = new CClientSocket();
+            TRACE("CClientSocket size is %d\r\n",sizeof(*m_instance));
 
         }
         return m_instance;
@@ -194,14 +195,20 @@ public:
         static size_t index = 0;
         while (true) {
             size_t len = recv(m_sock, buffer + index, BUFFER_SIZE - index, 0);
-            if ((len <= 0) && (index<=0)) {
+            if (((int)len <= 0) && ((int)index<=0)) {
                 return -1;
             }
             //Dump((BYTE*)buffer, index);
 
+            TRACE("recv len=%d(0x%08x) index=%d(0x%08x)\r\n", len, len, index, index);
+
             index += len;
             len = index;
+            TRACE("recv len=%d(0x%08x) index=%d(0x%08x)\r\n", len, len, index, index);
+
             m_packet = CPacket((BYTE*)buffer, len);  //通过构造函数解析数据包
+            TRACE("command %d\r\n",m_packet.sCmd);
+
             if (len > 0) {
                 memmove(buffer, buffer + len, index - len);
                 index -= len;
@@ -291,10 +298,13 @@ private:
 
 
     static void releaseInstance() {
+        TRACE("CClientSocket has called!!!\r\n");
+
         if (m_instance != NULL) {
             CClientSocket* tmp = m_instance;
             m_instance = NULL;
             delete tmp;
+            TRACE("CClientSocket has released\r\n"); 
         }
     }
 

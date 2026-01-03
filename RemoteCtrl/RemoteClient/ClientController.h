@@ -66,17 +66,7 @@ public:
 	//9 删除文件
 	//1981 测试连接
 	//返回值：是命令号，如果小于0，则是错误
-	int SendCommandPacket(int nCmd, bool bAutoClose = true, BYTE* pData = NULL, size_t nLength = 0) {
-		CClientSocket* pClient = CClientSocket::getInstance();
-		if (pClient->InitSocket() == false) return false;
-		pClient->Send(CPacket(nCmd, pData, nLength));
-		int cmd = DealCommand();
-		TRACE("ack:%d\r\n", cmd);
-		if (bAutoClose)
-			CloseSocket();
-		return cmd;
-
-	}
+	int SendCommandPacket(int nCmd, bool bAutoClose = true, BYTE* pData = NULL, size_t nLength = 0);
 
 	int GetImage(CImage& image) {
 		CClientSocket* pClient = CClientSocket::getInstance();
@@ -84,43 +74,17 @@ public:
 
 	}
 
-	int DownFile(CString strPath) {
-
-		CFileDialog dlg(FALSE, NULL, strPath, OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT, NULL, &m_remoteDlg); // 创建文件保存对话框
-		if (dlg.DoModal() == IDOK) {
-
-			m_strRemote = strPath;
-			m_strLocal= dlg.GetPathName();
-
-			m_hThreadDownload=(HANDLE)_beginthread(&CClientController::threadDownloadEntry, 0, this);
-			if (WaitForSingleObject(m_hThreadDownload, 0) != WAIT_TIMEOUT){
-				return -1;
-			}
-
-			m_remoteDlg.BeginWaitCursor();
-			m_statusDlg.m_info.SetWindowText(_T("命令正在执行中！"));
-			m_statusDlg.ShowWindow(SW_SHOW);
-			m_statusDlg.CenterWindow(&m_remoteDlg);
-			m_statusDlg.SetActiveWindow();
-		}
-		return 0;
-	}
+	int DownFile(CString strPath);
 
 	void StartWatchScreen();
 
-
-
 protected:
-
-
-
 
 	void threadWatchScreen();
 	static void threadWatchEntry(void* arg);
 
 	void threadDownloadFile();
 	static void threadDownloadEntry(void* arg);
-
 
 	CClientController():
 		m_statusDlg(&m_remoteDlg), m_watchDlg(&m_remoteDlg) 
@@ -141,6 +105,7 @@ protected:
 	static void releaseInstance() {
 		if (m_instance != NULL) {
 			delete m_instance;
+			TRACE("ClientController released!!!\r\n");
 			m_instance = NULL;
 		}
 	}
@@ -188,19 +153,14 @@ private:
 	HANDLE m_hThreadWatch;
 	bool m_isClosed; //监视是否关闭
 
-
-
 	CString m_strRemote;   //下载文件的远程路径
 	CString m_strLocal;    // 下载文件的本地路径
-
-
-
 
 	static CClientController* m_instance;
 
 	class CHelper {              //确保程序退出时销毁单例
 	public:
-		CHelper() { CClientController::getInstance(); }
+		CHelper() {}
 		~CHelper() { CClientController::releaseInstance(); }
 	};
 

@@ -5,9 +5,12 @@
 std::map<UINT, CClientController::MSGFUNC> CClientController::m_mapFunc;   //¾²Ì¬Ó³Éä±í£ºÏûÏ¢ID -> ¶ÔÓ¦µÄ´¦Àíº¯Êý
 CClientController* CClientController::m_instance = NULL;   
 
+
+
 CClientController* CClientController::getInstance() {
 	if (m_instance == NULL) {
-		m_instance = new CClientController();
+		m_instance = new CClientController(); CClientController::getInstance();
+		TRACE("CClientController size is %d\r\n", sizeof(*m_instance));
 		struct { UINT nMsg; MSGFUNC func; }MsgFuncs[] = 
 		{ 
 			{WM_SEND_PACK,&CClientController::OnSendPack},
@@ -22,7 +25,7 @@ CClientController* CClientController::getInstance() {
 		}
 
 	}
-	return nullptr;
+	return m_instance;
 }
 
 int CClientController::InitController()   // ³õÊ¼»¯¿ØÖÆÆ÷£º´´½¨¹¤×÷Ïß³Ì£¨ÓÃÓÚÒì²½´¦ÀíÏûÏ¢£¬±ÜÃâ×èÈûUI£©
@@ -52,12 +55,49 @@ LRESULT CClientController::SendMessage(MSG msg)   // Òì²½·¢ËÍÏûÏ¢µ½¹¤×÷Ïß³Ì£ººËÐ
 	
 }
    
+int CClientController::SendCommandPacket(int nCmd, bool bAutoClose, BYTE* pData, size_t nLength)
+{
+	CClientSocket* pClient = CClientSocket::getInstance();
+	if (pClient->InitSocket() == false) return false;
+	pClient->Send(CPacket(nCmd, pData, nLength));
+	int cmd = DealCommand();
+	TRACE("ack:%d\r\n", cmd);
+	if (bAutoClose)
+		CloseSocket();
+	return cmd;
+	
+}
+
+int CClientController::DownFile(CString strPath)
+{
+	CFileDialog dlg(FALSE, NULL, strPath, OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT, NULL, &m_remoteDlg); // ´´½¨ÎÄ¼þ±£´æ¶Ô»°¿ò
+	if (dlg.DoModal() == IDOK) {
+
+		m_strRemote = strPath;
+		m_strLocal = dlg.GetPathName();
+
+		m_hThreadDownload = (HANDLE)_beginthread(&CClientController::threadDownloadEntry, 0, this);
+		if (WaitForSingleObject(m_hThreadDownload, 0) != WAIT_TIMEOUT) {
+			return -1;
+		}
+
+		m_remoteDlg.BeginWaitCursor();
+		m_statusDlg.m_info.SetWindowText(_T("ÃüÁîÕýÔÚÖ´ÐÐÖÐ£¡"));
+		m_statusDlg.ShowWindow(SW_SHOW);
+		m_statusDlg.CenterWindow(&m_remoteDlg);
+		m_statusDlg.SetActiveWindow();
+	}
+	
+	return 0;
+}
+
 void CClientController::StartWatchScreen()
 {
 	m_isClosed = false;
-	CWatchDialog dlg(&m_remoteDlg);
+	//m_watchDlg.SetParent(&m_remoteDlg);
+	
 	m_hThreadWatch = (HANDLE)_beginthread(&CClientController::threadWatchEntry, 0, this);
-	dlg.DoModal();
+	m_watchDlg.DoModal();
 	m_isClosed = true;
 	WaitForSingleObject(m_hThreadWatch, 500);
 
@@ -67,11 +107,11 @@ void CClientController::threadWatchScreen()
 {
 	Sleep(50);
 	while (!m_isClosed) {
-		if (m_remoteDlg.isFull() == false) {
+		if (m_watchDlg.isFull() == false) {
 			int ret = SendCommandPacket(6);
 			if (ret == 6) {
 				if (GetImage(m_remoteDlg.GetImage()) == 0) {
-					m_remoteDlg.SetImageStatus(true);
+					m_watchDlg.SetImageStatus(true);
 				}
 				else { TRACE("»ñÈ¡Í¼Æ¬Ê§°Ü! ret=%d\r\n",ret); }
 			}
