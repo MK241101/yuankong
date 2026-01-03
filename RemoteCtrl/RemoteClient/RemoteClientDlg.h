@@ -6,7 +6,7 @@
 #include "ClientSocket.h"
 #include "StatusDlg.h"
 
-#define WM_SEND_PACKET (WM_USER+1)
+
 
 
 // CRemoteClientDlg 对话框
@@ -34,11 +34,9 @@ private:
 	CImage m_image;  //图片缓存
 	bool m_isFull;   //缓存区是否已满
 	bool m_isClosed; //监视是否关闭
+
 private:
-	static void threadEntryForWatchData(void* arg);
-    void threadWatchData();
-	static void threadEntryForDownFile(void* arg);
-	void threadDownFile();
+	
 	void LoadFileCurrent();
 	void LoadFileInfo();
 	CString GetPath(HTREEITEM hTree);
@@ -73,7 +71,7 @@ public:
 	afx_msg void OnDownloadFile();
 	afx_msg void OnDeleteFile();
 	afx_msg void OnRunFile();
-    afx_msg LRESULT OnSendPacket(WPARAM wParam, LPARAM lParam);
+
 	afx_msg void OnBnClickedBtnStartWatch();
 	afx_msg void OnTimer(UINT_PTR nIDEvent);
 	afx_msg void OnIpnFieldchangedIpaddressserv(NMHDR* pNMHDR, LRESULT* pResult);

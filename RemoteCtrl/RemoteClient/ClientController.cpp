@@ -52,6 +52,90 @@ LRESULT CClientController::SendMessage(MSG msg)   // Òì²½·¢ËÍÏûÏ¢µ½¹¤×÷Ïß³Ì£ººËĞ
 	
 }
    
+void CClientController::StartWatchScreen()
+{
+	m_isClosed = false;
+	CWatchDialog dlg(&m_remoteDlg);
+	m_hThreadWatch = (HANDLE)_beginthread(&CClientController::threadWatchEntry, 0, this);
+	dlg.DoModal();
+	m_isClosed = true;
+	WaitForSingleObject(m_hThreadWatch, 500);
+
+}
+
+void CClientController::threadWatchScreen()
+{
+	Sleep(50);
+	while (!m_isClosed) {
+		if (m_remoteDlg.isFull() == false) {
+			int ret = SendCommandPacket(6);
+			if (ret == 6) {
+				if (GetImage(m_remoteDlg.GetImage()) == 0) {
+					m_remoteDlg.SetImageStatus(true);
+				}
+				else { TRACE("»ñÈ¡Í¼Æ¬Ê§°Ü! ret=%d\r\n",ret); }
+			}
+
+		}
+		Sleep(1);
+	}
+}
+
+void CClientController::threadWatchEntry(void* arg)
+{
+	CClientController* thiz = (CClientController*)arg;
+	thiz->threadWatchScreen();
+	_endthread();
+
+}
+
+void CClientController::threadDownloadFile()
+{
+	FILE* pFile = fopen(m_strLocal, "wb+");
+	if (pFile == NULL) {
+		AfxMessageBox("±¾µØÃ»ÓĞÈ¨ÏŞ±£´æÎÄ¼ş£¬»òÕßÎÄ¼şÎŞ·¨´´½¨£¡£¡");
+		m_statusDlg.ShowWindow(SW_HIDE);
+		m_remoteDlg.EndWaitCursor();
+
+		return;
+	}
+	CClientSocket* pClient = CClientSocket::getInstance();
+	do {
+		int ret = SendCommandPacket(4, false, (BYTE*)(LPCSTR)m_strRemote, m_strRemote.GetLength());
+		long long nLength = *(long long*)pClient->GetPacket().strData.c_str();  //¶ÁÈ¡·şÎñ¶Ë·µ»ØµÄÎÄ¼ş×Ü³¤¶È
+		if (nLength == 0) {
+			AfxMessageBox("ÎÄ¼ş³¤¶ÈÎªÁã»òÕßÎŞ·¨¶ÁÈ¡ÎÄ¼ş£¡£¡");
+			break;
+		}
+
+		long long nCount = 0;
+
+		while (nCount < nLength) {          // Ñ­»·½ÓÊÕÎÄ¼şÊı¾İ£¬Ö±µ½½ÓÊÕÍêËùÓĞÄÚÈİ
+			ret = pClient->DealCommand();
+			if (ret < 0) {
+				AfxMessageBox("´«ÊäÊ§°Ü£¡£¡");
+				TRACE("´«ÊäÊ§°Ü£ºret=%d\r\n", ret);
+				break;
+			}
+			// ½«½ÓÊÕµ½µÄÊı¾İ°üÄÚÈİĞ´Èë±¾µØÎÄ¼ş
+			fwrite(pClient->GetPacket().strData.c_str(), 1, pClient->GetPacket().strData.size(), pFile);
+			nCount += pClient->GetPacket().strData.size();
+		}
+	} while (false);
+	fclose(pFile);
+	pClient->CloseSocket();
+	m_statusDlg.ShowWindow(SW_HIDE);
+    m_remoteDlg.EndWaitCursor();
+	m_remoteDlg.MessageBox(_T("ÎÄ¼şÏÂÔØÍê³É£¡"),_T("Íê³É"));
+}
+
+void CClientController::threadDownloadEntry(void* arg)
+{
+	CClientController* thiz=(CClientController*)arg;
+	thiz->threadDownloadFile();
+	_endthread();
+}
+
 void CClientController::threadFunc()   //ÏûÏ¢Ñ­»· + ÏûÏ¢·Ö·¢´¦Àí
 {
 	MSG msg;

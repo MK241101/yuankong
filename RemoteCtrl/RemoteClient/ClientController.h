@@ -34,17 +34,17 @@ public:
 	LRESULT SendMessage(MSG msg);   //异步发送消息到工作线程
 	void UpdateAddress(int nIP, int nPort) {
 		CClientSocket::getInstance()->UpdateAddress(nIP, nPort);
-	
+
 	}
-	
+
 	int DealCommand() {
 		return CClientSocket::getInstance()->DealCommand();
-	
+
 	}
 
 	void CloseSocket() {
 		CClientSocket::getInstance()->CloseSocket();
-	
+
 	}
 
 	bool SendPacket(const CPacket& pack) {
@@ -66,7 +66,7 @@ public:
 	//9 删除文件
 	//1981 测试连接
 	//返回值：是命令号，如果小于0，则是错误
-	int SendCommandPacket(int nCmd, bool bAutoClose=true, BYTE* pData=NULL, size_t nLength=0) {
+	int SendCommandPacket(int nCmd, bool bAutoClose = true, BYTE* pData = NULL, size_t nLength = 0) {
 		CClientSocket* pClient = CClientSocket::getInstance();
 		if (pClient->InitSocket() == false) return false;
 		pClient->Send(CPacket(nCmd, pData, nLength));
@@ -75,7 +75,7 @@ public:
 		if (bAutoClose)
 			CloseSocket();
 		return cmd;
-	
+
 	}
 
 	int GetImage(CImage& image) {
@@ -84,11 +84,50 @@ public:
 
 	}
 
+	int DownFile(CString strPath) {
+
+		CFileDialog dlg(FALSE, NULL, strPath, OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT, NULL, &m_remoteDlg); // 创建文件保存对话框
+		if (dlg.DoModal() == IDOK) {
+
+			m_strRemote = strPath;
+			m_strLocal= dlg.GetPathName();
+
+			m_hThreadDownload=(HANDLE)_beginthread(&CClientController::threadDownloadEntry, 0, this);
+			if (WaitForSingleObject(m_hThreadDownload, 0) != WAIT_TIMEOUT){
+				return -1;
+			}
+
+			m_remoteDlg.BeginWaitCursor();
+			m_statusDlg.m_info.SetWindowText(_T("命令正在执行中！"));
+			m_statusDlg.ShowWindow(SW_SHOW);
+			m_statusDlg.CenterWindow(&m_remoteDlg);
+			m_statusDlg.SetActiveWindow();
+		}
+		return 0;
+	}
+
+	void StartWatchScreen();
+
+
 
 protected:
+
+
+
+
+	void threadWatchScreen();
+	static void threadWatchEntry(void* arg);
+
+	void threadDownloadFile();
+	static void threadDownloadEntry(void* arg);
+
+
 	CClientController():
 		m_statusDlg(&m_remoteDlg), m_watchDlg(&m_remoteDlg) 
 	{
+		m_isClosed = true;
+		m_hThreadWatch = INVALID_HANDLE_VALUE;
+		m_hThreadDownload = INVALID_HANDLE_VALUE;
 		m_hThread = INVALID_HANDLE_VALUE; // 初始化线程句柄为无效
 		m_nThreadID = -1;                 // 初始化线程ID为-1
 	}
@@ -144,6 +183,18 @@ private:
 
 	HANDLE m_hThread;            // 工作线程句柄
 	unsigned m_nThreadID;        // 工作线程ID
+	HANDLE m_hThreadDownload;   //下载线程句柄
+
+	HANDLE m_hThreadWatch;
+	bool m_isClosed; //监视是否关闭
+
+
+
+	CString m_strRemote;   //下载文件的远程路径
+	CString m_strLocal;    // 下载文件的本地路径
+
+
+
 
 	static CClientController* m_instance;
 

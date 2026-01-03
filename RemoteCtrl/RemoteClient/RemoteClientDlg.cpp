@@ -85,7 +85,7 @@ BEGIN_MESSAGE_MAP(CRemoteClientDlg, CDialogEx)
 	ON_COMMAND(ID_DOWNLOAD_FILE, &CRemoteClientDlg::OnDownloadFile)
 	ON_COMMAND(ID_DELETE_FILE, &CRemoteClientDlg::OnDeleteFile)
 	ON_COMMAND(ID_RUN_FILE, &CRemoteClientDlg::OnRunFile)
-	ON_MESSAGE(WM_SEND_PACKET, &CRemoteClientDlg::OnSendPacket)
+
 	ON_BN_CLICKED(IDC_BTN_START_WATCH, &CRemoteClientDlg::OnBnClickedBtnStartWatch)
 	ON_WM_TIMER()
 	ON_NOTIFY(IPN_FIELDCHANGED, IDC_IPADDRESS_serv, &CRemoteClientDlg::OnIpnFieldchangedIpaddressserv)
@@ -221,101 +221,6 @@ void CRemoteClientDlg::OnBnClickedBtnFileinfo()
 	}*/
 }
 
-void CRemoteClientDlg::threadEntryForWatchData(void* arg)
-{
-	CRemoteClientDlg* thiz = (CRemoteClientDlg*)arg;
-	thiz->threadWatchData();
-	_endthread();
-}
-
-void CRemoteClientDlg::threadWatchData()
-{
-	Sleep(50);
-	CClientController* pCtrl = CClientController::getInstance();
-
-	while(!m_isClosed){
-		if (m_isFull == false) {
-			int ret=pCtrl->SendCommandPacket(6);
-
-			if (ret==6) {
-				if(pCtrl->GetImage(m_image)==0) m_isFull = true;
-				else { TRACE("获取图片失败！\r\n"); }
-			}
-			
-			else { Sleep(1); }
-		}
-		else { Sleep(1); }
-	}
-
-}
-
-void CRemoteClientDlg::threadEntryForDownFile(void* arg)
-{
-	CRemoteClientDlg* thiz = (CRemoteClientDlg*)arg;
-	thiz->threadDownFile();
-	_endthread();
-
-}
-
-void CRemoteClientDlg::threadDownFile()
-{
-	int nListSelected = m_List.GetSelectionMark();      //获取列表控件中选中项的索引
-	CString strFile = m_List.GetItemText(nListSelected, 0);   //从列表控件中获取选中项的文件名
-	CFileDialog dlg(FALSE, "*", strFile, OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT, NULL, this); // 创建文件保存对话框
-
-	if (dlg.DoModal() == IDOK) {    //在保存对话框中点击“确定”
-		FILE* pFile = fopen(dlg.GetPathName(), "wb+");  //打开本地文件
-		if (pFile == NULL) {
-			AfxMessageBox("本地没有权限保存文件，或者文件无法创建！！");
-			m_dlgStatus.ShowWindow(SW_HIDE);
-			EndWaitCursor();
-
-			return;
-		}
-
-		HTREEITEM hSelevted = m_Tree.GetSelectedItem();     //获取树形控件中选中的节点
-		strFile = GetPath(hSelevted) + strFile;     // 拼接远程文件的完整路径（树形路径 + 列表文件名）
-		TRACE("%s\r\n", LPCSTR(strFile));
-		CClientSocket* pClient = CClientSocket::getInstance();
-		do {
-			
-			int ret = CClientController::getInstance()->SendCommandPacket(4, false, (BYTE*)(LPCTSTR)strFile, strFile.GetLength());
-			
-			
-			if (ret < 0) {                             // 检查下载命令是否发送成功
-				AfxMessageBox("执行下载命令失败！！");
-				TRACE("执行下载失败：ret=%d\r\n", ret);
-				break;
-			}
-			//TODO: 为什么这里GetPacket().strData返回的是文件总长度  strData应该是数据内容吧
-			long long nLength = *(long long*)pClient->GetPacket().strData.c_str();  //读取服务端返回的文件总长度
-			if (nLength == 0) {
-				AfxMessageBox("文件长度为零或者无法读取文件！！");
-				break;
-			}
-
-			long long nCount = 0;
-
-			while (nCount < nLength) {          // 循环接收文件数据，直到接收完所有内容
-				ret = pClient->DealCommand();
-				if (ret < 0) {
-					AfxMessageBox("传输失败！！");
-					TRACE("传输失败：ret=%d\r\n", ret);
-					break;
-				}
-				// 将接收到的数据包内容写入本地文件
-				fwrite(pClient->GetPacket().strData.c_str(), 1, pClient->GetPacket().strData.size(), pFile);
-				nCount += pClient->GetPacket().strData.size();
-			}
-		} while (false);
-		fclose(pFile);
-		pClient->CloseSocket();
-	}
-	m_dlgStatus.ShowWindow(SW_HIDE);
-	EndWaitCursor();
-	MessageBox(_T("文件下载完成"));
-}
-
 void CRemoteClientDlg::LoadFileCurrent()
 {
 	HTREEITEM hTree= m_Tree.GetSelectedItem();  //获取树形控件中当前选中的节点（要加载的目标目录）
@@ -441,12 +346,17 @@ void CRemoteClientDlg::OnNMRClickListFile(NMHDR* pNMHDR, LRESULT* pResult)
 
 void CRemoteClientDlg::OnDownloadFile()
 {
-	_beginthread(CRemoteClientDlg::threadEntryForDownFile, 0, this);
-	BeginWaitCursor();
-	m_dlgStatus.m_info.SetWindowText(_T("命令正在执行中！"));
-	m_dlgStatus.ShowWindow(SW_SHOW);
-	m_dlgStatus.CenterWindow(this);
-	m_dlgStatus.SetActiveWindow();
+	int nListSelected = m_List.GetSelectionMark();      //获取列表控件中选中项的索引
+	CString strFile = m_List.GetItemText(nListSelected, 0);   //从列表控件中获取选中项的文件名
+	HTREEITEM hSelevted = m_Tree.GetSelectedItem();     //获取树形控件中选中的节点
+	strFile = GetPath(hSelevted) + strFile;     // 拼接远程文件的完整路径（树形路径 + 列表文件名）
+	int ret=CClientController::getInstance()->DownFile(strFile);
+
+	if (ret != 0) {
+		MessageBox(_T("下载文件失败！！"));
+		TRACE("下载失败 ret=%d\r\n", ret);
+	}
+
 }
 
 void CRemoteClientDlg::OnDeleteFile()
@@ -482,40 +392,10 @@ void CRemoteClientDlg::OnRunFile()
 
 }
 
-LRESULT CRemoteClientDlg::OnSendPacket(WPARAM wParam, LPARAM lParam)
-{
-	int ret = 0;
-	int cmd = wParam >> 1;
-	switch (cmd) {
-	case 4:{
-			CString strFile=(LPCSTR)lParam;
-			ret = CClientController::getInstance()->SendCommandPacket(cmd, wParam & 1, (BYTE*)(LPCSTR)strFile, strFile.GetLength());
-		}
-		break;
-
-	case 5: {  //鼠标操作
-			ret= CClientController::getInstance()->SendCommandPacket(cmd, wParam & 1, (BYTE*)lParam, sizeof(MOUSEEV));
-		}
-		  break;
-	case 6:
-	case 7:
-	case 8:
-			ret= CClientController::getInstance()->SendCommandPacket(cmd,wParam & 1);
-			break;
-    default:
-			ret = -1;
-	}
-	return ret;
-}
-
 void CRemoteClientDlg::OnBnClickedBtnStartWatch()
 {
-	m_isClosed = false;
-	CWatchDialog dlg(this);
-	HANDLE hThread=(HANDLE)_beginthread(CRemoteClientDlg::threadEntryForWatchData, 0, this);
-	dlg.DoModal();
-	m_isClosed = true;
-	WaitForSingleObject(hThread, 500);
+	CClientController::getInstance()->StartWatchScreen();
+	
 
 }
 
