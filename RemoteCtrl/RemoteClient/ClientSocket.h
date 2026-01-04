@@ -228,17 +228,29 @@ public:
         return -1;
     }
 
-    bool Send(const char* pData, int nSize) {
-        if (m_sock == -1) { return false; }
-        return send(m_sock, pData, nSize, 0) > 0;
-    }
+    
 
-    bool Send(const CPacket& pack) {
-        TRACE("m_sock = %d\r\n", m_sock);
-        if (m_sock == -1) return false;
-        std::string strOut;
-        pack.Data(strOut);
-        return send(m_sock, strOut.c_str(), strOut.size(), 0) > 0;
+    bool SendPacket(const CPacket& pack,std::list<CPacket>&lstPacks) {
+        if (m_sock == INVALID_SOCKET) {
+            if(InitSocket()==FALSE) return false;
+            _beginthread(&CClientSocket::threadEntry, 0, this);
+        } 
+
+        m_lstSend.push_back(pack);
+        WaitForSingleObject(pack.hEvent, INFINITE);
+        std::map<HANDLE, std::list<CPacket>>::iterator it;
+        it = m_mapAck.find(pack.hEvent);
+        if (it != m_mapAck.end()) {
+            std::list<CPacket>::iterator i;
+            for (i = it->second.begin(); i != it->second.end(); i++) {
+                lstPacks.push_back(*i);
+            }
+
+            m_mapAck.erase(it);
+
+            return true;
+        }
+        return false;
     }
 
     bool GetFilePath(std::string& strPath) {
@@ -260,14 +272,17 @@ public:
         return m_packet;
 
     }
+   
     void CloseSocket() {
         closesocket(m_sock);
-        m_sock=INVALID_SOCKET;
+        m_sock=INADDR_ANY;
     }
 
     void UpdateAddress(INT nIP, int nPort) {
-         m_nIP = nIP;
-        m_nPort = nPort;
+        if ((m_nIP != nIP) || (m_nPort != nPort)) {
+            m_nIP = nIP;
+            m_nPort = nPort;
+        }
     
     }
 
@@ -279,7 +294,7 @@ private:
         m_nPort = ss.m_nPort;
     };
     CClientSocket& operator=(const CClientSocket& ss) {};
-    CClientSocket() :m_nIP(INADDR_ANY), m_nPort(0) {
+    CClientSocket() :m_nIP(INADDR_ANY), m_nPort(0), m_sock(INVALID_SOCKET) {
 
         if (InitSockEnv() == FALSE) {
             MessageBox(NULL, _T("初始化Socket环境失败"), _T("初始化错误"), MB_OK | MB_ICONERROR);
@@ -322,6 +337,15 @@ private:
             TRACE("CClientSocket has released\r\n"); 
         }
     }
+
+
+    bool Send(const char* pData, int nSize) {
+        if (m_sock == -1) { return false; }
+        return send(m_sock, pData, nSize, 0) > 0;
+    }
+
+    bool Send(const CPacket& pack);
+
 
     class CHelper {
     public:
