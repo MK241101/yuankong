@@ -49,7 +49,7 @@ LRESULT CClientController::SendMessage(MSG msg)   // Òì²½·¢ËÍÏûÏ¢µ½¹¤×÷Ïß³Ì£ººËÐ
 	PostThreadMessage(m_nThreadID, WM_SEND_MESSAGE, (WPARAM)&info, (LPARAM)hEvent);//Òì²½·¢ËÍÏûÏ¢µ½¹¤×÷Ïß³Ì
 	
 	WaitForSingleObject(hEvent, -1);
-	
+	CloseHandle(hEvent);
 	return info.result;
 	
 }
@@ -57,12 +57,15 @@ LRESULT CClientController::SendMessage(MSG msg)   // Òì²½·¢ËÍÏûÏ¢µ½¹¤×÷Ïß³Ì£ººËÐ
 	
 int CClientController::SendCommandPacket(int nCmd, bool bAutoClose, BYTE* pData, size_t nLength, std::list<CPacket>* plstPacks)
 {
+	TRACE("cmd=%d ,%s strat %lld\r\n", nCmd, __FUNCTION__, GetTickCount64());
 	CClientSocket* pClient = CClientSocket::getInstance();
 	HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
 
 	std::list<CPacket> lstPacks;
 	if(plstPacks==NULL) plstPacks = &lstPacks;
 	pClient->SendPacket(CPacket(nCmd, pData, nLength, hEvent), *plstPacks);
+
+	CloseHandle(hEvent);
 	if (lstPacks.size() > 0) { 
 		return plstPacks->front().sCmd;
 
@@ -70,6 +73,7 @@ int CClientController::SendCommandPacket(int nCmd, bool bAutoClose, BYTE* pData,
 		
 		
 	}
+	TRACE("%s strat %lld\r\n", __FUNCTION__, GetTickCount64());
 
 	
 	
@@ -103,7 +107,7 @@ int CClientController::DownFile(CString strPath)
 void CClientController::StartWatchScreen()
 {
 	m_isClosed = false;
-	m_watchDlg.SetParent(&m_remoteDlg);
+	
 	
 	m_hThreadWatch = (HANDLE)_beginthread(&CClientController::threadWatchEntry, 0, this);
 	m_watchDlg.DoModal();
@@ -120,10 +124,11 @@ void CClientController::threadWatchScreen()
 			std::list<CPacket> lstPacks;
 			int ret = SendCommandPacket(6,true,NULL,0,&lstPacks);
 			if (ret == 6) {
-				int a= CEdoyunTool::Bytes2Image(m_remoteDlg.GetImage(), lstPacks.front().strData);
-				if (a == 0) {
+				
+				if (CEdoyunTool::Bytes2Image(m_watchDlg.GetImage(), lstPacks.front().strData) == 0) {
 
 					m_watchDlg.SetImageStatus(true);
+					TRACE("³É¹¦ÉèÖÃÍ¼Æ¬!\r\n");
 				}
 				else { TRACE("»ñÈ¡Í¼Æ¬Ê§°Ü! ret=%d\r\n",ret); }
 			}
