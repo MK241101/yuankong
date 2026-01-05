@@ -8,6 +8,7 @@
 #include<map>
 #include<mutex>
 
+#define WM_SEND_PACK (WM_USER + 1)  //发送数据包
 
 #pragma pack(push)
 #pragma pack(1)
@@ -249,6 +250,24 @@ private:
         m_nIP = ss.m_nIP;
         m_nPort = ss.m_nPort;
         m_bAutoClose = ss.m_bAutoClose;
+        m_hThread = INVALID_HANDLE_VALUE;
+        struct {
+            UINT message;
+            MSGFUNC func;
+        }funcs[] = {
+            {WM_SEND_PACK,&CClientSocket::SendPack},
+            {0,NULL}
+        
+        };
+
+        for (int i = 0; funcs[i].message != 0; i++) {
+           if(m_mapFunc.insert(std::pair<UINT,MSGFUNC>(funcs[i].message, funcs[i].func)).second == false)
+               TRACE("插入失败，消息值：%d 函数值：%08X 序号：%d\r\n", funcs[i].message, funcs[i].func, i);
+
+        }
+
+
+
     };
     CClientSocket& operator=(const CClientSocket& ss) {};
     CClientSocket() :m_nIP(INADDR_ANY), m_nPort(0), m_sock(INVALID_SOCKET),m_bAutoClose(true), m_hThread(INVALID_HANDLE_VALUE){
@@ -273,6 +292,7 @@ private:
     static void threadEntry(void* arg);
 
     void threadFunc();
+    void threadFunc2();
 
     BOOL InitSockEnv() {
         WSADATA data;
@@ -302,6 +322,8 @@ private:
 
     bool Send(const CPacket& pack);
 
+    void SendPack(UINT nMsg, WPARAM wParam/*缓冲区的值*/, LPARAM lParam/*缓冲区的长度*/);
+
 
     class CHelper {
     public:
@@ -326,6 +348,10 @@ private:
     std::mutex m_lock;
 
     HANDLE m_hThread;
+    typedef void(CClientSocket::* MSGFUNC)(UINT nMsg, WPARAM wParam, LPARAM lParam);
+    std::map<UINT, MSGFUNC> m_mapFunc;
+
+
 };
 
 

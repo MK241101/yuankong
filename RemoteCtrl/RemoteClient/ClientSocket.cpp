@@ -92,8 +92,12 @@ void CClientSocket::threadFunc() {
                     else if (length <= 0 && index <= 0) {
                         CloseSocket();
                         SetEvent(head.hEvent);
-                        m_mapAutoClosed.erase(it0);
-                        //TRACE("SetEvent：%d second：%d\r\n", head.sCmd, it0->second);
+                        if (it0 != m_mapAutoClosed.end()) {
+                            TRACE("SetEvent：%d second：%d\r\n", head.sCmd, it0->second);
+                        
+                        }
+                        else { TRACE("异常退出，没有对应的pair对"); }
+                        
                         break;
                     }
                 } while (it0->second == false);
@@ -101,6 +105,7 @@ void CClientSocket::threadFunc() {
             }
             m_lock.lock();
             m_lstSend.pop_front();
+            m_mapAutoClosed.erase(head.hEvent);
             m_lock.unlock();
 
             if (InitSocket() == false) {
@@ -115,6 +120,20 @@ void CClientSocket::threadFunc() {
 
 }
 
+void CClientSocket::threadFunc2()
+{
+    MSG msg;
+    while (::GetMessage(&msg, NULL, 0, 0)) {
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+        if (m_mapFunc.find(msg.message) != m_mapFunc.end()) {
+            (this->*m_mapFunc[msg.message])(msg.message,msg.wParam, msg.lParam);
+        
+        }
+    }
+
+}
+
 bool CClientSocket::Send(const CPacket& pack) {
     TRACE("m_sock = %d\r\n", m_sock);
     if (m_sock == -1) return false;
@@ -122,6 +141,23 @@ bool CClientSocket::Send(const CPacket& pack) {
     pack.Data(strOut);
 
     return send(m_sock, strOut.c_str(), strOut.size(), 0) > 0;
+}
+
+void CClientSocket::SendPack(UINT nMsg, WPARAM wParam, LPARAM lParam)
+{
+    if (InitSocket() == true) {
+        int ret = send(m_sock, (char*)wParam, (int)lParam, 0);
+        if (ret > 0) {
+        
+        
+        }
+        else { CloseSocket(); }
+    
+    }
+    else {
+    
+    }
+
 }
 
 

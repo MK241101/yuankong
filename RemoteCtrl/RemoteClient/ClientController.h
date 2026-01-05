@@ -7,7 +7,6 @@
 #include"resource.h"
 #include"EdoyunTool.h"
 
-
 #define WM_SHOW_STATUS (WM_USER + 3)  //展示状态
 #define WM_SHOW_WATCH (WM_USER + 4)  //远程监控
 #define WM_SEND_MESSAGE (WM_USER + 0x1000)  //通用消息转发
