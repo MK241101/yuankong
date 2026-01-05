@@ -195,13 +195,14 @@ void CRemoteClientDlg::OnBnClickedBtnTest()
 
 void CRemoteClientDlg::OnBnClickedBtnFileinfo()
 {
-	int ret= CClientController::getInstance()->SendCommandPacket(1);
-	if (ret == -1) {
+	std::list<CPacket> lstPackets;
+	int ret= CClientController::getInstance()->SendCommandPacket(1,true,NULL,0,&lstPackets);
+	if (ret == -1 || (lstPackets.size() <= 0)) {
 		AfxMessageBox(_T("命令处理失败"));
 		return;
 	}
-	CClientSocket* pClient = CClientSocket::getInstance();
-	std::string drivers = pClient->GetPacket().strData;
+	CPacket& head = lstPackets.front();
+	std::string drivers = head.strData;
 	std::string dr;
 	m_Tree.DeleteAllItems();
 	for (size_t i = 0; i < drivers.size(); i++) {
@@ -214,10 +215,11 @@ void CRemoteClientDlg::OnBnClickedBtnFileinfo()
 		}
 		dr += drivers[i];
 	}
-	/*if (dr.size() > 0) {
+	if (dr.size() > 0) {
+		dr += ":";
 		HTREEITEM hTemp = m_Tree.InsertItem(dr.c_str(), TVI_ROOT, TVI_LAST);
 		m_Tree.InsertItem(NULL, hTemp, TVI_LAST);
-	}*/
+	}
 }
 
 void CRemoteClientDlg::LoadFileCurrent()
@@ -226,6 +228,7 @@ void CRemoteClientDlg::LoadFileCurrent()
 	CString strPath = GetPath(hTree);  // 调用GetPath函数，获取双击节点的完整路径
 
 	m_List.DeleteAllItems();    //清空列表控件原有所有项（避免旧数据残留）
+
 	int nCmd = CClientController::getInstance()->SendCommandPacket(2, false, (BYTE*)(LPCTSTR)strPath, strPath.GetLength()); //发送命令包：命令码2，路径字符串作为数据
 
 	PFILEINFO pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().strData.c_str();  //处理服务端返回的文件信息
@@ -256,37 +259,29 @@ void CRemoteClientDlg::LoadFileInfo()
 
 	m_List.DeleteAllItems();
 	CString strPath = GetPath(hTreeSelected);  // 调用GetPath函数，获取双击节点的完整路径
-	int nCmd = CClientController::getInstance()->SendCommandPacket(2, false, (BYTE*)(LPCTSTR)strPath, strPath.GetLength()); //发送命令包：命令码2，路径字符串作为数据
 
-	PFILEINFO pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().strData.c_str();  //处理服务端返回的文件信息
-	
+	std::list<CPacket> lstPackets;
+	int nCmd = CClientController::getInstance()->SendCommandPacket(2, false, (BYTE*)(LPCTSTR)strPath, strPath.GetLength(),&lstPackets); //发送命令包：命令码2，路径字符串作为数据
 
-	int Count = 0;
-	while (pInfo->HasNext) {
-		TRACE("[%s] isdir %d\r\n", pInfo->szFileName, pInfo->IsDirectory);
-		if (pInfo->IsDirectory) {
-			if ((CString(pInfo->szFileName) == ".") || (CString(pInfo->szFileName) == "..")) {
-				int cmd = CClientController::getInstance()->DealCommand();
-				TRACE("ack:%d\n", cmd);
-				if (cmd < 0) { break; }
-				pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().strData.c_str();
-				continue;
+	if (lstPackets.size() > 0) {
+		std::list<CPacket>::iterator it = lstPackets.begin();
+		for (; it != lstPackets.end(); it++) {
+			PFILEINFO pInfo = (PFILEINFO)(*it).strData.c_str();  //处理服务端返回的文件信息
+			if (pInfo->HasNext == FALSE)continue;
+			if (pInfo->IsDirectory) {
+				if ((CString(pInfo->szFileName) == ".") || (CString(pInfo->szFileName) == "..")) {
+					
+					continue;
+				}
+				HTREEITEM hTemp = m_Tree.InsertItem(pInfo->szFileName, hTreeSelected, TVI_LAST);  // 将文件名插入到树形控件中
+				m_Tree.InsertItem("", hTemp, TVI_LAST);
+
 			}
-			HTREEITEM hTemp = m_Tree.InsertItem(pInfo->szFileName, hTreeSelected, TVI_LAST);  // 将文件名插入到树形控件中
-			m_Tree.InsertItem("", hTemp, TVI_LAST);
-
+			else { m_List.InsertItem(0, pInfo->szFileName); }
+		
 		}
-		else { m_List.InsertItem(0, pInfo->szFileName); }
-		
-		Count++;
-		int cmd = CClientController::getInstance()->DealCommand();
-		
-		if (cmd < 0) { break; }
-		pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().strData.c_str();
 	}
 
-	//CClientController::getInstance()->CloseSocket();
-	TRACE("Count=%d\r\n", Count);
 }
 
 // 根据树形控件的节点句柄，递归向上拼接完整路径（从根节点到当前节点）

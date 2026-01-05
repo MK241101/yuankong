@@ -63,7 +63,7 @@ int CClientController::SendCommandPacket(int nCmd, bool bAutoClose, BYTE* pData,
 
 	std::list<CPacket> lstPacks;
 	if(plstPacks==NULL) plstPacks = &lstPacks;
-	pClient->SendPacket(CPacket(nCmd, pData, nLength, hEvent), *plstPacks);
+	pClient->SendPacket(CPacket(nCmd, pData, nLength, hEvent), *plstPacks, bAutoClose);
 
 	CloseHandle(hEvent);
 	if (lstPacks.size() > 0) { 

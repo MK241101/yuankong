@@ -189,8 +189,8 @@ public:
         int ret = connect(m_sock, (sockaddr*)&serv_addr, sizeof(serv_addr));
 
         if (ret == -1) {
-            AfxMessageBox("连接服务器失败");
-            TRACE("连接服务器失败：%d %s\r\n",WSAGetLastError(),GetErrInfo(WSAGetLastError()).c_str());
+            AfxMessageBox("连接失败");
+            TRACE("连接失败：%d %s\r\n",WSAGetLastError(),GetErrInfo(WSAGetLastError()).c_str());
             return false;
         }
         return true;
@@ -342,7 +342,7 @@ private:
     int m_nIP;
 
     std::map<HANDLE, bool> m_mapAutoClosed;
-    std::map<HANDLE,std::list<CPacket>> m_mapAck;
+    std::map<HANDLE,std::list<CPacket>&> m_mapAck;
     std::list<CPacket> m_lstSend;
 
     bool m_bAutoClose;

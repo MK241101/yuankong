@@ -105,7 +105,7 @@ protected:
     int MakeDirectoryInfo(std::list<CPacket>& lstPacket, CPacket& inPacket) {
         std::string strPath=inPacket.strData;  //存储要查询的目标目录路径
 
-        if (_chdir(strPath.c_str()) != 0) {
+         if (_chdir(strPath.c_str()) != 0) {
             FILEINFO finfo;
             finfo.HasNext = FALSE;
             lstPacket.push_back(CPacket(2, (BYTE*)&finfo, sizeof(finfo)));
