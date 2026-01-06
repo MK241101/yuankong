@@ -55,12 +55,19 @@ LRESULT CClientController::SendMessage(MSG msg)   // Òì²½·¢ËÍÏûÏ¢µ½¹¤×÷Ïß³Ì£ººËĞ
 }
    
 	
-bool CClientController::SendCommandPacket(HWND hWnd,int nCmd, bool bAutoClose, BYTE* pData, size_t nLength)
+bool CClientController::SendCommandPacket(HWND hWnd,int nCmd, bool bAutoClose, BYTE* pData, size_t nLength, WPARAM wParam)
 {
 	TRACE("cmd=%d ,%s strat %lld\r\n", nCmd, __FUNCTION__, GetTickCount64());
 	CClientSocket* pClient = CClientSocket::getInstance();
-	return pClient->SendPacket(hWnd,CPacket(nCmd, pData, nLength), bAutoClose);
+	return pClient->SendPacket(hWnd,CPacket(nCmd, pData, nLength), bAutoClose,wParam);
 
+}
+
+void CClientController::DownloadEnd()
+{
+	m_statusDlg.ShowWindow(SW_HIDE);
+	m_remoteDlg.EndWaitCursor();
+	m_remoteDlg.MessageBox(_T("ÏÂÔØÍê³É"), _T("Íê³É"));
 }
 
 int CClientController::DownFile(CString strPath)
@@ -70,11 +77,13 @@ int CClientController::DownFile(CString strPath)
 
 		m_strRemote = strPath;
 		m_strLocal = dlg.GetPathName();
-
-		m_hThreadDownload = (HANDLE)_beginthread(&CClientController::threadDownloadEntry, 0, this);
-		if (WaitForSingleObject(m_hThreadDownload, 0) != WAIT_TIMEOUT) {
+		FILE* pFile = fopen(m_strLocal, "wb+");
+		if (pFile == NULL) {
+			AfxMessageBox(_T("±¾µØÃ»ÓĞÈ¨ÏŞ±£´æÎÄ¼ş£¬»òÕßÎÄ¼şÎŞ·¨´´½¨£¡£¡"));
 			return -1;
 		}
+
+		SendCommandPacket(m_remoteDlg, 4, false, (BYTE*)(LPCSTR)m_strRemote, m_strRemote.GetLength(), (WPARAM)pFile);
 
 		m_remoteDlg.BeginWaitCursor();
 		m_statusDlg.m_info.SetWindowText(_T("ÃüÁîÕıÔÚÖ´ĞĞÖĞ£¡"));
@@ -144,7 +153,7 @@ void CClientController::threadDownloadFile()
 	}
 	CClientSocket* pClient = CClientSocket::getInstance();
 	do {
-		int ret = SendCommandPacket(m_remoteDlg,4, false, (BYTE*)(LPCSTR)m_strRemote, m_strRemote.GetLength());
+		int ret = SendCommandPacket(m_remoteDlg,4, false, (BYTE*)(LPCSTR)m_strRemote, m_strRemote.GetLength(),(WPARAM)pFile);
 		long long nLength = *(long long*)pClient->GetPacket().strData.c_str();  //¶ÁÈ¡·şÎñ¶Ë·µ»ØµÄÎÄ¼ş×Ü³¤¶È
 		if (nLength == 0) {
 			AfxMessageBox("ÎÄ¼ş³¤¶ÈÎªÁã»òÕßÎŞ·¨¶ÁÈ¡ÎÄ¼ş£¡£¡");

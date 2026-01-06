@@ -72,4 +72,7 @@ public:
 	afx_msg void OnIpnFieldchangedIpaddressserv(NMHDR* pNMHDR, LRESULT* pResult);
 
 	afx_msg void OnEnChangeEditPort();
+
+	afx_msg LRESULT OnSendPackAck(WPARAM wParam, LPARAM lParam);
+
 };
