@@ -408,12 +408,11 @@ LRESULT CRemoteClientDlg::OnSendPackAck(WPARAM wParam, LPARAM lParam) {
 	else if (lParam == 1) {
 	}
 	else  {
-		CPacket* pPacket = (CPacket*)wParam;
+		if (wParam != NULL) {
+			CPacket head = *(CPacket*)wParam;
+			delete (CPacket*)wParam;
 
-		if (pPacket != NULL) {
-			CPacket& head = *pPacket;
-
-			switch (pPacket->sCmd) {
+			switch (head.sCmd) {
 			case 1:       //获取驱动器列表
 			{
 				std::string drivers = head.strData;

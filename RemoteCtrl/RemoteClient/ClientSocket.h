@@ -362,6 +362,7 @@ private:
     std::map<UINT, MSGFUNC> m_mapFunc;
 
     UINT m_nThreadID;
+    HANDLE m_eventInvoke;
 };
 
 
