@@ -9,6 +9,8 @@
 #include<mutex>
 
 #define WM_SEND_PACK (WM_USER + 1)  //发送数据包
+#define WM_SEND_PACK_ACK (WM_USER + 2)  //发送数据包应答
+
 
 #pragma pack(push)
 #pragma pack(1)
@@ -23,7 +25,6 @@ public:
         sCmd = pack.sCmd;
         strData = pack.strData;
         sSum = pack.sSum;
-        hEvent = pack.hEvent;
     }
     CPacket& operator=(const CPacket& pack) {
         if (this != &pack) {
@@ -32,12 +33,11 @@ public:
             sCmd = pack.sCmd;
             strData = pack.strData;
             sSum = pack.sSum;
-            hEvent = pack.hEvent;
 
         }
         return *this;
     }
-    CPacket(WORD nCmd, const BYTE* pData, size_t nSize,HANDLE hEvent) {     //打包数据
+    CPacket(WORD nCmd, const BYTE* pData, size_t nSize) {     //打包数据
         sHead = 0xFEFF;
         nLength = nSize + 4;
         sCmd = nCmd;
@@ -54,11 +54,10 @@ public:
         {
             sSum += BYTE(strData[j]) & 0xFF;
         }
-        this->hEvent = hEvent;
 
     }
 
-    CPacket(const BYTE* pData, size_t& nSize):hEvent(INVALID_HANDLE_VALUE){
+    CPacket(const BYTE* pData, size_t& nSize){
         size_t i = 0;
         for (; i < nSize; i++) {
             if (*(WORD*)(pData + i) == 0xFEFF) {
@@ -119,7 +118,6 @@ public:
     WORD sCmd;   //命令字
     std::string strData; //数据体
     WORD sSum;  //校验和
-    HANDLE hEvent;   
 };
 
 #pragma pack(pop)
@@ -158,6 +156,42 @@ typedef struct file_info {
 std::string GetErrInfo(int wsaErrCode);
 
 void Dump(BYTE* pData, size_t nSize);
+
+enum {
+    CSM_AUTOCLOSE=1,  //自动关闭模式
+
+
+
+};
+
+
+typedef struct PacketData{
+
+    std::string strData;
+    UINT nMode;
+    PacketData(const char* pData, size_t nLen, UINT mode) {
+        strData.resize(nLen);
+        memcpy((char*)strData.c_str(), pData, nLen);
+        nMode = mode;
+
+    }
+
+    PacketData(const PacketData& data) {
+        strData = data.strData;
+        nMode = data.nMode;
+    
+    }
+
+    PacketData& operator=(const PacketData& data) {
+        if (this != &data) {
+            strData = data.strData;
+            nMode = data.nMode;
+        }
+        return *this;
+    }
+}PACKET_DATA;
+
+
 
 
 class CClientSocket
@@ -208,7 +242,7 @@ public:
 
     
 
-    bool SendPacket(const CPacket& pack, std::list<CPacket>& lstPacks, bool isAutoClosed = true);
+    bool SendPacket(HWND hWnd ,const CPacket& pack, bool isAutoClosed=true);
 
     bool GetFilePath(std::string& strPath) {
         if ((m_packet.sCmd >= 2) && (m_packet.sCmd <= 4)) {
@@ -245,39 +279,11 @@ public:
 
 
 private:
-    CClientSocket(const CClientSocket& ss) {
-        m_sock = ss.m_sock;
-        m_nIP = ss.m_nIP;
-        m_nPort = ss.m_nPort;
-        m_bAutoClose = ss.m_bAutoClose;
-        m_hThread = INVALID_HANDLE_VALUE;
-        struct {
-            UINT message;
-            MSGFUNC func;
-        }funcs[] = {
-            {WM_SEND_PACK,&CClientSocket::SendPack},
-            {0,NULL}
-        
-        };
+    CClientSocket(const CClientSocket& ss);
 
-        for (int i = 0; funcs[i].message != 0; i++) {
-           if(m_mapFunc.insert(std::pair<UINT,MSGFUNC>(funcs[i].message, funcs[i].func)).second == false)
-               TRACE("插入失败，消息值：%d 函数值：%08X 序号：%d\r\n", funcs[i].message, funcs[i].func, i);
-
-        }
-
-
-
-    };
     CClientSocket& operator=(const CClientSocket& ss) {};
-    CClientSocket() :m_nIP(INADDR_ANY), m_nPort(0), m_sock(INVALID_SOCKET),m_bAutoClose(true), m_hThread(INVALID_HANDLE_VALUE){
-        if (InitSockEnv() == FALSE) {
-            MessageBox(NULL, _T("初始化Socket环境失败"), _T("初始化错误"), MB_OK | MB_ICONERROR);
-            exit(0);
-        }
-        m_buffer.resize(BUFFER_SIZE);
-        memset(m_buffer.data(), 0, BUFFER_SIZE);
-    };
+
+    CClientSocket();
 
     ~CClientSocket() {
         closesocket(m_sock);
@@ -289,9 +295,9 @@ private:
 
 
 
-    static void threadEntry(void* arg);
+    static unsigned __stdcall threadEntry(void* arg);
 
-    void threadFunc();
+   // void threadFunc();
     void threadFunc2();
 
     BOOL InitSockEnv() {
@@ -351,7 +357,7 @@ private:
     typedef void(CClientSocket::* MSGFUNC)(UINT nMsg, WPARAM wParam, LPARAM lParam);
     std::map<UINT, MSGFUNC> m_mapFunc;
 
-
+    UINT m_nThreadID;
 };
 
 
