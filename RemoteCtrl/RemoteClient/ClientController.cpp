@@ -177,6 +177,7 @@ void CClientController::threadDownloadFile()
 	m_statusDlg.ShowWindow(SW_HIDE);
     m_remoteDlg.EndWaitCursor();
 	m_remoteDlg.MessageBox(_T("文件下载完成！"),_T("完成"));
+	m_remoteDlg.LoadFileInfo();
 }
 
 void CClientController::threadDownloadEntry(void* arg)

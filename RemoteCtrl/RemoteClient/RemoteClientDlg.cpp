@@ -129,7 +129,7 @@ BOOL CRemoteClientDlg::OnInitDialog()
 
 	// TODO: 在此添加额外的初始化代码
 	UpdateData();
-	m_server_address=0xC0A80A69;//192.168.10.106
+	m_server_address=0xC0A80A6A;//192.168.10.106
 	m_nPort = _T("9527");
 	CClientController* pController = CClientController::getInstance();
 	pController->UpdateAddress(m_server_address, atoi((LPCTSTR)m_nPort));
@@ -244,27 +244,11 @@ void CRemoteClientDlg::LoadFileInfo()
 	m_List.DeleteAllItems();
 	CString strPath = GetPath(hTreeSelected);  // 调用GetPath函数，获取双击节点的完整路径
 
-	std::list<CPacket> lstPackets;
-	int nCmd = CClientController::getInstance()->SendCommandPacket(GetSafeHwnd(), 2, false, (BYTE*)(LPCTSTR)strPath, strPath.GetLength(),(WPARAM)hTreeSelected); //发送命令包：命令码2，路径字符串作为数据
+	TRACE("hTreeSelected %08X\r\n", hTreeSelected);
 
-	if (lstPackets.size() > 0) {
-		std::list<CPacket>::iterator it = lstPackets.begin();
-		for (; it != lstPackets.end(); it++) {
-			PFILEINFO pInfo = (PFILEINFO)(*it).strData.c_str();  //处理服务端返回的文件信息
-			if (pInfo->HasNext == FALSE)continue;
-			if (pInfo->IsDirectory) {
-				if ((CString(pInfo->szFileName) == ".") || (CString(pInfo->szFileName) == "..")) {
-					
-					continue;
-				}
-				HTREEITEM hTemp = m_Tree.InsertItem(pInfo->szFileName, hTreeSelected, TVI_LAST);  // 将文件名插入到树形控件中
-				m_Tree.InsertItem("", hTemp, TVI_LAST);
+	CClientController::getInstance()->SendCommandPacket(GetSafeHwnd(), 2, false, (BYTE*)(LPCTSTR)strPath, strPath.GetLength(),(WPARAM)hTreeSelected); //发送命令包：命令码2，路径字符串作为数据
 
-			}
-			else { m_List.InsertItem(0, pInfo->szFileName); }
-		
-		}
-	}
+	
 
 }
 
@@ -440,13 +424,18 @@ LRESULT CRemoteClientDlg::OnSendPackAck(WPARAM wParam, LPARAM lParam) {
 			case 2:  //获取文件列表
 			{
 				PFILEINFO pInfo = (PFILEINFO)head.strData.c_str();  //处理服务端返回的文件信息
+				TRACE("hasnext %d isdirectory %d %s\r\n",pInfo->HasNext,pInfo->IsDirectory,pInfo->szFileName);
+
 				if (pInfo->HasNext == FALSE)break;
 				if (pInfo->IsDirectory) {
 					if ((CString(pInfo->szFileName) == ".") || (CString(pInfo->szFileName) == "..")) {
 						break;
 					}
-					HTREEITEM hTemp = m_Tree.InsertItem(pInfo->szFileName, (HTREEITEM)lParam, TVI_LAST);  // 将文件名插入到树形控件中
+					TRACE("hselected %08X\r\n", lParam,m_Tree.GetSelectedItem());
+
+					HTREEITEM hTemp = m_Tree.InsertItem(pInfo->szFileName, (HTREEITEM)lParam);  // 将文件名插入到树形控件中
 					m_Tree.InsertItem("", hTemp, TVI_LAST);
+					m_Tree.Expand((HTREEITEM)lParam, TVE_EXPAND);  // 展开当前节点
 
 				}
 				else { m_List.InsertItem(0, pInfo->szFileName); }
@@ -461,6 +450,7 @@ LRESULT CRemoteClientDlg::OnSendPackAck(WPARAM wParam, LPARAM lParam) {
 			case 4:
 			{
 				static LONGLONG length = 0,index=0;
+				TRACE("length %d index %d\r\n", length, index);
 				if (length == 0) {
 					length = *(long long*)head.strData.c_str();
 					if (length == 0) {
@@ -480,6 +470,13 @@ LRESULT CRemoteClientDlg::OnSendPackAck(WPARAM wParam, LPARAM lParam) {
 					FILE* pFile=(FILE*)lParam;
 					fwrite(head.strData.c_str(), 1, head.strData.size(), pFile);
 					index += head.strData.size();
+					TRACE("index=%d\r\n", index);
+					if (index >= length) {
+						fclose((FILE*)lParam);
+						length = 0;
+						index = 0;
+						CClientController::getInstance()->DownloadEnd();
+					}
 				}
 			
 			}
