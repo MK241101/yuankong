@@ -12,16 +12,6 @@
 #define WM_SEND_MESSAGE (WM_USER + 0x1000)  //通用消息转发
 
 
-/*
-Step1：初始化 → InitController() 创建工作线程 → 线程进入threadFunc()的消息循环（阻塞等消息）
-Step2：调用SendMessage(MSG) → 生成UUID标记消息 → 存入m_mapMessage → Post到工作线程
-Step3：工作线程收到WM_SEND_MESSAGE → 从参数取消息/UUID → 找对应的处理函数（如OnSendPack）→ 执行逻辑 → 通过UUID删除缓存的消息
-Step4：程序退出 → 辅助类CHelper析构 → 调用releaseInstance()销毁单例 → 析构函数等待线程退出
-
-*/
-
-
-
 class CClientController
 {
 
@@ -29,7 +19,7 @@ public:
 	static CClientController* getInstance();
 	int InitController();            //创建工作线程
 	int Invoke(CWnd* pMainWin);     //启动客户端主对话框
-	LRESULT SendMessage(MSG msg);   //异步发送消息到工作线程
+
 	void UpdateAddress(int nIP, int nPort) {
 		CClientSocket::getInstance()->UpdateAddress(nIP, nPort);
 
@@ -77,15 +67,12 @@ protected:
 	void threadWatchScreen();
 	static void threadWatchEntry(void* arg);
 
-	void threadDownloadFile();
-	static void threadDownloadEntry(void* arg);
 
 	CClientController():
 		m_statusDlg(&m_remoteDlg), m_watchDlg(&m_remoteDlg) 
 	{
 		m_isClosed = true;
 		m_hThreadWatch = INVALID_HANDLE_VALUE;
-		m_hThreadDownload = INVALID_HANDLE_VALUE;
 		m_hThread = INVALID_HANDLE_VALUE; // 初始化线程句柄为无效
 		m_nThreadID = -1;                 // 初始化线程ID为-1
 	}
@@ -141,7 +128,6 @@ private:
 
 	HANDLE m_hThread;            // 工作线程句柄
 	unsigned m_nThreadID;        // 工作线程ID
-	HANDLE m_hThreadDownload;   //下载线程句柄
 
 	HANDLE m_hThreadWatch;
 	bool m_isClosed; //监视是否关闭

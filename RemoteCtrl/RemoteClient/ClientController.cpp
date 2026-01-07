@@ -3,17 +3,15 @@
 #include "ClientSocket.h"
 
 std::map<UINT, CClientController::MSGFUNC> CClientController::m_mapFunc;   //静态映射表：消息ID -> 对应的处理函数
-CClientController* CClientController::m_instance = NULL;   
-
+CClientController* CClientController::m_instance = NULL; 
+CClientController::CHelper CClientController::m_helper;     // 静态帮助类，用于初始化静态成员变量
 
 
 CClientController* CClientController::getInstance() {
 	if (m_instance == NULL) {
 		m_instance = new CClientController(); CClientController::getInstance();
 		TRACE("CClientController size is %d\r\n", sizeof(*m_instance));
-		struct { UINT nMsg; MSGFUNC func; }MsgFuncs[] = 
-		{ 
-		
+		struct { UINT nMsg; MSGFUNC func; }MsgFuncs[] = { 
 			{WM_SHOW_STATUS,&CClientController::OnShowStatus},
 			{WM_SHOW_WATCH,&CClientController::OnShowWatcher},
 			{(UINT)- 1,NULL}
@@ -41,19 +39,6 @@ int CClientController::Invoke(CWnd* pMainWin) {   // 启动远程客户端主对话框
 
 }
 
-LRESULT CClientController::SendMessage(MSG msg)   // 异步发送消息到工作线程：核心接口
-{
-	HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);  
-	if(hEvent==NULL) return -2;
-	MSGINFO info(msg);
-	PostThreadMessage(m_nThreadID, WM_SEND_MESSAGE, (WPARAM)&info, (LPARAM)hEvent);//异步发送消息到工作线程
-	
-	WaitForSingleObject(hEvent, -1);
-	CloseHandle(hEvent);
-	return info.result;
-	
-}
-   
 	
 bool CClientController::SendCommandPacket(HWND hWnd,int nCmd, bool bAutoClose, BYTE* pData, size_t nLength, WPARAM wParam)
 {
@@ -98,8 +83,6 @@ int CClientController::DownFile(CString strPath)
 void CClientController::StartWatchScreen()
 {
 	m_isClosed = false;
-	
-	
 	m_hThreadWatch = (HANDLE)_beginthread(&CClientController::threadWatchEntry, 0, this);
 	m_watchDlg.DoModal();
 	m_isClosed = true;
@@ -139,53 +122,6 @@ void CClientController::threadWatchEntry(void* arg)
 
 }
 
-void CClientController::threadDownloadFile()
-{
-	FILE* pFile = fopen(m_strLocal, "wb+");
-	if (pFile == NULL) {
-		AfxMessageBox("本地没有权限保存文件，或者文件无法创建！！");
-		m_statusDlg.ShowWindow(SW_HIDE);
-		m_remoteDlg.EndWaitCursor();
-
-		return;
-	}
-	CClientSocket* pClient = CClientSocket::getInstance();
-	do {
-		int ret = SendCommandPacket(m_remoteDlg,4, false, (BYTE*)(LPCSTR)m_strRemote, m_strRemote.GetLength(),(WPARAM)pFile);
-		long long nLength = *(long long*)pClient->GetPacket().strData.c_str();  //读取服务端返回的文件总长度
-		if (nLength == 0) {
-			AfxMessageBox("文件长度为零或者无法读取文件！！");
-			break;
-		}
-
-		long long nCount = 0;
-
-		while (nCount < nLength) {          // 循环接收文件数据，直到接收完所有内容
-			ret = pClient->DealCommand();
-			if (ret < 0) {
-				AfxMessageBox("传输失败！！");
-				TRACE("传输失败：ret=%d\r\n", ret);
-				break;
-			}
-			// 将接收到的数据包内容写入本地文件
-			fwrite(pClient->GetPacket().strData.c_str(), 1, pClient->GetPacket().strData.size(), pFile);
-			nCount += pClient->GetPacket().strData.size();
-		}
-	} while (false);
-	fclose(pFile);
-	pClient->CloseSocket();
-	m_statusDlg.ShowWindow(SW_HIDE);
-    m_remoteDlg.EndWaitCursor();
-	m_remoteDlg.MessageBox(_T("文件下载完成！"),_T("完成"));
-	m_remoteDlg.LoadFileInfo();
-}
-
-void CClientController::threadDownloadEntry(void* arg)
-{
-	CClientController* thiz=(CClientController*)arg;
-	thiz->threadDownloadFile();
-	_endthread();
-}
 
 void CClientController::threadFunc()   //消息循环 + 消息分发处理
 {
