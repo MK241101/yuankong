@@ -75,28 +75,6 @@ BOOL CWatchDialog::OnInitDialog()
 
 void CWatchDialog::OnTimer(UINT_PTR nIDEvent)
 {
-	// TODO: 在此添加消息处理程序代码和/或调用默认值
-	/*if (nIDEvent == 0) {
-
-		CClientController* pParent = CClientController::getInstance();
-		if (m_isFull) {
-			CRect rect;
-			m_picture.GetWindowRect(rect);
-			m_nObjWidth=m_image.GetWidth();
-            m_nObjHeight = m_image.GetHeight();
-
-			m_image.StretchBlt(m_picture.GetDC()->GetSafeHdc(), 0, 0, rect.Width(), rect.Height(), SRCCOPY);
-
-
-			m_picture.InvalidateRect(NULL);
-			TRACE("更新图片完成%d\r\n", m_nObjHeight);
-
-			m_image.Destroy();
-			m_isFull= false;
-
-		}
-
-	}*/
 	CDialog::OnTimer(nIDEvent);
 }
 
@@ -109,27 +87,28 @@ LRESULT CWatchDialog::OnSendPackAck(WPARAM wParam, LPARAM lParam)
 	else{
 		CPacket* pPacket=(CPacket*)wParam;
 		if (pPacket != NULL) {
-			switch (pPacket->sCmd) {
+			CPacket head = *(CPacket*)wParam;
+			delete (CPacket*)wParam;
+			switch (head.sCmd) {
 			case 6:
 			{
-				if (m_isFull) {
-					CEdoyunTool::Bytes2Image(m_image, pPacket->strData);
-					CRect rect;
-					m_picture.GetWindowRect(rect);
-					m_nObjWidth = m_image.GetWidth();
-					m_nObjHeight = m_image.GetHeight();
-					m_image.StretchBlt(m_picture.GetDC()->GetSafeHdc(), 0, 0, rect.Width(), rect.Height(), SRCCOPY);
-					m_picture.InvalidateRect(NULL);
-					TRACE("更新图片完成%d\r\n", m_nObjHeight);
-
-					m_image.Destroy();
-					m_isFull = false;
-				}
+				CEdoyunTool::Bytes2Image(m_image, head.strData);
+				CRect rect;
+				m_picture.GetWindowRect(rect);
+				m_nObjWidth = m_image.GetWidth();
+				m_nObjHeight = m_image.GetHeight();
+				m_image.StretchBlt(m_picture.GetDC()->GetSafeHdc(), 0, 0, rect.Width(), rect.Height(), SRCCOPY);
+				m_picture.InvalidateRect(NULL);
+				TRACE("更新图片完成%d\r\n", m_nObjHeight);
+				m_image.Destroy();
+				
 				break;
 
 			}
 
 			case 5:
+				TRACE("远程端应答了鼠标操作\r\n");
+				break;
 			case 7:
 			case 8:
 			default:
@@ -164,7 +143,7 @@ void CWatchDialog::OnLButtonDown(UINT nFlags, CPoint point)
 		TRACE("x=%d,y=%d\r\n", point.x, point.y);
 		CPoint remote = UserPoint2RemoteScreenPoint(point);
 		TRACE("x=%d,y=%d\r\n", point.x, point.y);
-
+		TRACE("remote.x=%d,remote.y=%d\r\n", remote.x, remote.y);
 		//封装
 		MOUSEEV event;
 		event.ptXY = remote;
