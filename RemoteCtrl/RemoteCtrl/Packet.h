@@ -11,23 +11,6 @@ class CPacket   //数据包结构
 {
 public:
     CPacket() :sHead(0), nLength(0), sCmd(0), sSum(0) {}  //
-    CPacket(const CPacket& pack) {
-        sHead = pack.sHead;
-        nLength = pack.nLength;
-        sCmd = pack.sCmd;
-        strData = pack.strData;
-        sSum = pack.sSum;
-    }
-    CPacket& operator=(const CPacket& pack) {
-        if (this != &pack) {
-            sHead = pack.sHead;
-            nLength = pack.nLength;
-            sCmd = pack.sCmd;
-            strData = pack.strData;
-            sSum = pack.sSum;
-        }
-        return *this;
-    }
     CPacket(WORD nCmd, const BYTE* pData, size_t nSize) {     //打包数据
         sHead = 0xFEFF;
         nLength = nSize + 4;
@@ -46,7 +29,14 @@ public:
             sSum += BYTE(strData[j]) & 0xFF;
         }
     }
-
+    CPacket(const CPacket& pack) {
+        sHead = pack.sHead;
+        nLength = pack.nLength;
+        sCmd = pack.sCmd;
+        strData = pack.strData;
+        sSum = pack.sSum;
+    }
+   
     CPacket(const BYTE* pData, size_t& nSize) {                 //从数据块中解析出数据包
         size_t i = 0;
         for (; i < nSize; i++) {
@@ -57,7 +47,7 @@ public:
             }
         }
 
-        if (i + 8 > nSize) {             //包头+包长度+命令字+校验和最小8字节，包未完整接收，解析失败
+        if (i + 4 + 2 + 2 > nSize) {             //包头+包长度+命令字+校验和最小8字节，包未完整接收，解析失败
             nSize = 0;
             return;
         }
@@ -89,6 +79,17 @@ public:
             return;
         }
         nSize = 0;
+    }
+
+    CPacket& operator=(const CPacket& pack) {
+        if (this != &pack) {
+            sHead = pack.sHead;
+            nLength = pack.nLength;
+            sCmd = pack.sCmd;
+            strData = pack.strData;
+            sSum = pack.sSum;
+        }
+        return *this;
     }
 
     ~CPacket() {}

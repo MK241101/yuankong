@@ -9,7 +9,7 @@ CClientController::CHelper CClientController::m_helper;     // ¾²Ì¬°ïÖúÀà£¬ÓÃÓÚ³
 
 CClientController* CClientController::getInstance() {
 	if (m_instance == NULL) {
-		m_instance = new CClientController(); CClientController::getInstance();
+		m_instance = new CClientController(); 
 		TRACE("CClientController size is %d\r\n", sizeof(*m_instance));
 		struct { UINT nMsg; MSGFUNC func; }MsgFuncs[] = { 
 			{WM_SHOW_STATUS,&CClientController::OnShowStatus},
@@ -32,7 +32,7 @@ int CClientController::InitController()   // ³õÊ¼»¯¿ØÖÆÆ÷£º´´½¨¹¤×÷Ïß³Ì£¨ÓÃÓÚÒì²
 	return 0;
 }
 
-int CClientController::Invoke(CWnd* pMainWin) {   // Æô¶¯Ô¶³Ì¿Í»§¶ËÖ÷¶Ô»°¿ò
+int CClientController::Invoke(CWnd*& pMainWin) {   // Æô¶¯Ô¶³Ì¿Í»§¶ËÖ÷¶Ô»°¿ò
 	
 	pMainWin = &m_remoteDlg;
 	return m_remoteDlg.DoModal();
@@ -44,7 +44,7 @@ bool CClientController::SendCommandPacket(HWND hWnd,int nCmd, bool bAutoClose, B
 {
 	TRACE("cmd=%d ,%s strat %lld\r\n", nCmd, __FUNCTION__, GetTickCount64());
 	CClientSocket* pClient = CClientSocket::getInstance();
-	bool ret=pClient->SendPacket(hWnd,CPacket(nCmd, pData, nLength), bAutoClose,wParam);
+	bool ret=pClient->SendPacket(hWnd,CPacket(nCmd, pData, nLength), bAutoClose,wParam);  
 	return ret;
 }
 

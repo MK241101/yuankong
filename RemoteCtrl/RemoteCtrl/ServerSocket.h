@@ -19,7 +19,19 @@ public:
         }
         return m_instance;
     }
+    bool InitSocket(short port) {
 
+        sockaddr_in serv_addr, client_adr;
+        memset(&serv_addr, 0, sizeof(serv_addr));
+        serv_addr.sin_family = AF_INET;
+        serv_addr.sin_addr.s_addr = INADDR_ANY;
+        serv_addr.sin_port = htons(port);
+
+        bind(m_sock, (sockaddr*)&serv_addr, sizeof(serv_addr));
+        if (listen(m_sock, 1) == -1) { return false; };
+
+        return true;
+    }
     int Run(SOCKET_CALLBACK callback, void* arg, short port=9527) {
         bool ret = InitSocket(port);
         if(ret==false) { return -1; }
@@ -49,19 +61,7 @@ public:
         
     }
 protected:
-    bool InitSocket(short port) {
-
-        sockaddr_in serv_addr, client_adr;
-        memset(&serv_addr, 0, sizeof(serv_addr));
-        serv_addr.sin_family = AF_INET;
-        serv_addr.sin_addr.s_addr = INADDR_ANY;
-        serv_addr.sin_port = htons(port);
-
-        bind(m_sock, (sockaddr*)&serv_addr, sizeof(serv_addr));
-        if (listen(m_sock, 1) == -1) { return false; };
-
-        return true;
-    }
+    
    
     bool AcceptClient()
     {
@@ -88,9 +88,10 @@ protected:
             size_t len = recv(m_client, buffer+ index, BUFFER_SIZE -index, 0);
             if (len <= 0) { 
                 delete[] buffer;
-
                 return -1; 
             }
+            TRACE("recv %d\r\n", len);
+
 			index += len;
             len = index;
             m_packet = CPacket((BYTE*)buffer, len);  //通过构造函数解析数据包
@@ -131,7 +132,7 @@ private:
     };
     CServerSocket& operator=(const CServerSocket& ss) {};
     CServerSocket() {
-        m_client = -1;
+        m_client = INVALID_SOCKET;
         if (InitSockEnv() == FALSE) {
             MessageBox(NULL, _T("初始化Socket环境失败"), _T("初始化错误"), MB_OK | MB_ICONERROR);
             exit(0);
@@ -148,7 +149,7 @@ private:
 
     BOOL InitSockEnv() {
         WSADATA data;
-        if (WSAStartup(MAKEWORD(1, 1), &data) != 0) {
+        if (WSAStartup(MAKEWORD(2, 0), &data) != 0) {
             return FALSE;
         }
         return TRUE;          // 成功初始化

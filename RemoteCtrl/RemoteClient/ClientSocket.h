@@ -19,24 +19,7 @@ class CPacket   //数据包结构
 {
 public:
     CPacket() :sHead(0), nLength(0), sCmd(0), sSum(0) {}  //
-    CPacket(const CPacket& pack) {
-        sHead = pack.sHead;
-        nLength = pack.nLength;
-        sCmd = pack.sCmd;
-        strData = pack.strData;
-        sSum = pack.sSum;
-    }
-    CPacket& operator=(const CPacket& pack) {
-        if (this != &pack) {
-            sHead = pack.sHead;
-            nLength = pack.nLength;
-            sCmd = pack.sCmd;
-            strData = pack.strData;
-            sSum = pack.sSum;
-
-        }
-        return *this;
-    }
+    
     CPacket(WORD nCmd, const BYTE* pData, size_t nSize) {     //打包数据
         sHead = 0xFEFF;
         nLength = nSize + 4;
@@ -56,8 +39,16 @@ public:
         }
 
     }
+    
+    CPacket(const CPacket& pack) {
+        sHead = pack.sHead;
+        nLength = pack.nLength;
+        sCmd = pack.sCmd;
+        strData = pack.strData;
+        sSum = pack.sSum;
+    }
 
-    CPacket(const BYTE* pData, size_t& nSize){
+    CPacket(const BYTE* pData, size_t& nSize) {
         size_t i = 0;
         for (; i < nSize; i++) {
             if (*(WORD*)(pData + i) == 0xFEFF) {
@@ -79,7 +70,7 @@ public:
         if (nLength > 4) {
             strData.resize(nLength - 2 - 2);
             memcpy((void*)strData.c_str(), pData + i, nLength - 4);
-            TRACE("%s\r\n", strData.c_str() + 12);
+            TRACE("%s\r\n", strData.c_str());
             i += nLength - 4;
         }
         sSum = *(WORD*)(pData + i); i += 2;
@@ -94,8 +85,19 @@ public:
         }
         nSize = 0;
     }
-
     ~CPacket() {}
+
+    CPacket& operator=(const CPacket& pack) {
+        if (this != &pack) {
+            sHead = pack.sHead;
+            nLength = pack.nLength;
+            sCmd = pack.sCmd;
+            strData = pack.strData;
+            sSum = pack.sSum;
+
+        }
+        return *this;
+    }
 
     int Size() { //包数据的大小
         return nLength + 6;
@@ -121,8 +123,6 @@ public:
 };
 
 #pragma pack(pop)
-
-
 
 typedef struct MouseEvent {
     MouseEvent() {
@@ -150,27 +150,16 @@ typedef struct file_info {
 
 }FILEINFO, * PFILEINFO;
 
-
-//把 Windows 网络编程中（WSA）的数字错误码（比如 10060 表示连接超时、10061 表示连接被拒绝），
-//转换成人类可读的文本描述
-std::string GetErrInfo(int wsaErrCode);
-
-void Dump(BYTE* pData, size_t nSize);
-
 enum {
-    CSM_AUTOCLOSE=1,  //自动关闭模式
-
-
-
+    CSM_AUTOCLOSE = 1,  //自动关闭模式
 };
 
-
-typedef struct PacketData{
+typedef struct PacketData {
 
     std::string strData;
     UINT nMode;
     WPARAM wParam;
-    PacketData(const char* pData, size_t nLen, UINT mode, WPARAM nParam=0) {
+    PacketData(const char* pData, size_t nLen, UINT mode, WPARAM nParam = 0) {
         strData.resize(nLen);
         memcpy((char*)strData.c_str(), pData, nLen);
         nMode = mode;
@@ -195,7 +184,11 @@ typedef struct PacketData{
     }
 }PACKET_DATA;
 
+//把 Windows 网络编程中（WSA）的数字错误码（比如 10060 表示连接超时、10061 表示连接被拒绝），
+//转换成人类可读的文本描述
+std::string GetErrInfo(int wsaErrCode);
 
+void Dump(BYTE* pData, size_t nSize);
 
 
 class CClientSocket
@@ -219,7 +212,7 @@ public:
         static size_t index = 0;
         while (true) {
             size_t len = recv(m_sock, buffer + index, BUFFER_SIZE - index, 0);
-            if (((int)len <= 0) && ((int)index<=0)) {
+            if ((len <= 0) && (index<=0)) {
                 return -1;
             }
             //Dump((BYTE*)buffer, index);
@@ -270,7 +263,7 @@ public:
    
     void CloseSocket() {
         closesocket(m_sock);
-        m_sock=INADDR_ANY;
+        m_sock= INVALID_SOCKET;
     }
 
     void UpdateAddress(INT nIP, int nPort) {
@@ -283,86 +276,65 @@ public:
 
 
 private:
+    HANDLE m_eventInvoke;//启动事件
+    UINT m_nThreadID;
+    typedef void(CClientSocket::* MSGFUNC)(UINT nMsg, WPARAM wParam, LPARAM lParam);
+    std::map<UINT, MSGFUNC> m_mapFunc;
+    HANDLE m_hThread;
+    bool m_bAutoClose;
+    std::mutex m_lock;
+    std::list<CPacket> m_lstSend;
+    std::map<HANDLE, std::list<CPacket>&> m_mapAck;
+    std::map<HANDLE, bool> m_mapAutoClosed;
+    int m_nIP;//地址
+    int m_nPort;//端口
+    std::vector<char> m_buffer;
+    SOCKET m_sock;
+    CPacket m_packet;
+    CClientSocket& operator=(const CClientSocket& ss) {}
     CClientSocket(const CClientSocket& ss);
-
-    CClientSocket& operator=(const CClientSocket& ss) {};
-
     CClientSocket();
-
     ~CClientSocket() {
         closesocket(m_sock);
         m_sock = INVALID_SOCKET;
-        WSACleanup();     // 清理 Winsock 库
-
-    };
-
-
-
-
+        WSACleanup();
+    }
     static unsigned __stdcall threadEntry(void* arg);
-
-   // void threadFunc();
+    //void threadFunc();
     void threadFunc2();
-
     BOOL InitSockEnv() {
         WSADATA data;
         if (WSAStartup(MAKEWORD(1, 1), &data) != 0) {
             return FALSE;
         }
-        return TRUE;          // 成功初始化
-
+        return TRUE;
     }
-
+    bool Send(const char* pData, int nSize) {
+        if (m_sock == -1) return false;
+        return send(m_sock, pData, nSize, 0) > 0;
+    }
+    bool Send(const CPacket& pack);
+    void SendPack(UINT nMsg, WPARAM wParam/*缓冲区的值*/, LPARAM lParam/*缓冲区的长度*/);
     static void releaseInstance() {
-        TRACE("CClientSocket has called!!!\r\n");
-
+        TRACE("CClientSocket has been called!\r\n");
         if (m_instance != NULL) {
             CClientSocket* tmp = m_instance;
             m_instance = NULL;
             delete tmp;
-            TRACE("CClientSocket has released\r\n"); 
+            TRACE("CClientSocket has released!\r\n");
         }
     }
-
-
-    bool Send(const char* pData, int nSize) {
-        if (m_sock == -1) { return false; }
-        return send(m_sock, pData, nSize, 0) > 0;
-    }
-
-    bool Send(const CPacket& pack);
-
-    void SendPack(UINT nMsg, WPARAM wParam/*缓冲区的值*/, LPARAM lParam/*缓冲区的长度*/);
-
-
+    static CClientSocket* m_instance;
     class CHelper {
     public:
-        CHelper() { CClientSocket::getInstance(); }
-        ~CHelper() { CClientSocket::releaseInstance(); }
+        CHelper() {
+            CClientSocket::getInstance();
+        }
+        ~CHelper() {
+            CClientSocket::releaseInstance();
+        }
     };
-
     static CHelper m_helper;
-    static CClientSocket* m_instance;
-
-    SOCKET m_sock;
-    CPacket m_packet;
-    std::vector<char> m_buffer;
-    int m_nPort;
-    int m_nIP;
-
-    std::map<HANDLE, bool> m_mapAutoClosed;
-    std::map<HANDLE,std::list<CPacket>&> m_mapAck;
-    std::list<CPacket> m_lstSend;
-
-    bool m_bAutoClose;
-    std::mutex m_lock;
-
-    HANDLE m_hThread;
-    typedef void(CClientSocket::* MSGFUNC)(UINT nMsg, WPARAM wParam, LPARAM lParam);
-    std::map<UINT, MSGFUNC> m_mapFunc;
-
-    UINT m_nThreadID;
-    HANDLE m_eventInvoke;
 };
 
 

@@ -184,7 +184,7 @@ void CRemoteClientDlg::OnBnClickedBtnTest()
 void CRemoteClientDlg::OnBnClickedBtnFileinfo()
 {
 	std::list<CPacket> lstPackets;
-	int ret= CClientController::getInstance()->SendCommandPacket(GetSafeHwnd(), 1,true,NULL,0);
+	int ret= CClientController::getInstance()->SendCommandPacket(GetSafeHwnd(),1,true,NULL,0,0);
 	if (ret == 0 ) {
 		AfxMessageBox(_T("命令处理失败"));
 		return;
@@ -247,15 +247,15 @@ void CRemoteClientDlg::LoadFileCurrent()
 
 	PFILEINFO pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().strData.c_str();  //处理服务端返回的文件信息
 
-	while (pInfo->HasNext) {       // 循环解析服务端返回的文件信息
-		TRACE("[%s] isdir %d\r\n", pInfo->szFileName, pInfo->IsDirectory);
-		if (!pInfo->IsDirectory) {   // 仅将“非目录”的文件插入列表控件
-			m_List.InsertItem(0, pInfo->szFileName);
+	while (pInfo->HasNext) {
+		TRACE("[%s] isdir \r\n", pInfo->szFileName, pInfo->IsDirectory);
+		if (!pInfo->IsDirectory) {
+			if (CString(pInfo->szFileName) == "." || (CString(pInfo->szFileName) == ".."))
+				m_List.InsertItem(0, pInfo->szFileName);
 		}
-
 		int cmd = CClientController::getInstance()->DealCommand();
-		TRACE("ack:%d\n", cmd);
-		if (cmd < 0) { break; }
+		TRACE("ack:%d\r\n", cmd);
+		if (cmd < 0) break;
 		pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().strData.c_str();
 	}
 	//CClientController::getInstance()->CloseSocket();
@@ -291,9 +291,9 @@ void CRemoteClientDlg::UpdateFileInfo(const FILEINFO& finfo,HTREEITEM hParent)
 	if (finfo.IsDirectory) {
 		if ((CString(finfo.szFileName) == ".") || (CString(finfo.szFileName) == "..")) return;
 
-		TRACE("hselected %08X\r\n", hParent, m_Tree.GetSelectedItem());
+		TRACE("hselected %08X %08X\r\n", hParent, m_Tree.GetSelectedItem());
 
-		HTREEITEM hTemp = m_Tree.InsertItem(finfo.szFileName, hParent);  // 将文件名插入到树形控件中
+		HTREEITEM hTemp = m_Tree.InsertItem(finfo.szFileName, (HTREEITEM)hParent);  // 将文件名插入到树形控件中
 		m_Tree.InsertItem("", hTemp, TVI_LAST);
 		m_Tree.Expand(hParent, TVE_EXPAND);  // 展开当前节点
 

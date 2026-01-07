@@ -18,7 +18,7 @@ class CClientController
 public:
 	static CClientController* getInstance();
 	int InitController();            //创建工作线程
-	int Invoke(CWnd* pMainWin);     //启动客户端主对话框
+	int Invoke(CWnd* &pMainWin);     //启动客户端主对话框
 
 	void UpdateAddress(int nIP, int nPort) {
 		CClientSocket::getInstance()->UpdateAddress(nIP, nPort);
