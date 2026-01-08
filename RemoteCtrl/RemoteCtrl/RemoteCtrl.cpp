@@ -75,8 +75,8 @@ void ChooseAutoInvoke() {
     strInfo += _T("按下“否”按钮，程序只运行一次，不会在系统内留下任何东西！\n");
     int ret = MessageBox(NULL, strInfo, _T("警告"), MB_YESNOCANCEL | MB_ICONWARNING | MB_TOPMOST);
     if (ret == IDYES) {
-        WriteRegisterTable(strPath);
-        //WriteStartupDir(strPath);
+        //WriteRegisterTable(strPath);
+        WriteStartupDir(strPath);
     }
     else if (ret == IDCANCEL) {
         ::exit(0);
