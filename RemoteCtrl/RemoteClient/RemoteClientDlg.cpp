@@ -258,7 +258,7 @@ void CRemoteClientDlg::LoadFileCurrent()
 		if (cmd < 0) break;
 		pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().strData.c_str();
 	}
-	//CClientController::getInstance()->CloseSocket();
+	
 }
 
 void CRemoteClientDlg::Str2Tree(const std::string& drivers,CTreeCtrl& tree)
