@@ -90,6 +90,8 @@ void ShowError()
     FormatMessage(
         FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_ALLOCATE_BUFFER,NULL, GetLastError(),MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),(LPWSTR)&lpMessageBuf, 0, NULL);
     OutputDebugString(lpMessageBuf);
+    MessageBox(NULL, lpMessageBuf, _T("发生错误"), 0);
+
     LocalFree(lpMessageBuf);
 }
 
@@ -113,17 +115,57 @@ bool IsAdmin() {
         return eve.TokenIsElevated;
     }
 
-    //printf("length of tokeninformation is %d\r\n", len);
     return false;
 }
+
+void RunAsAdmin()
+{
+    HANDLE hToken = NULL;
+    BOOL ret = LogonUser(L"Administrator", NULL, NULL, LOGON32_LOGON_INTERACTIVE, LOGON32_PROVIDER_DEFAULT, &hToken);
+    if (!ret) {
+        ShowError();
+        MessageBox(NULL, _T("登录错误！！"),_T("程序错误"),0);
+        ::exit(0);
+    }
+    OutputDebugString(L"Logon administrator success!\r\n");
+    STARTUPINFO si = { 0 };
+    PROCESS_INFORMATION pi = { 0 };
+
+    TCHAR sPath[MAX_PATH] = _T("");
+    GetCurrentDirectory(MAX_PATH, sPath);
+
+    CString strCmd = sPath;
+    strCmd+=_T("\\RemoteCtrl.exe");
+
+
+    //ret=CreateProcessWithTokenW(hToken,LOGON_WITH_PROFILE,NULL, (LPWSTR)(LPCWSTR)strCmd,CREATE_UNICODE_ENVIRONMENT, NULL, NULL, &si, &pi);
+    ret = CreateProcessWithLogonW(_T("Administrator"), NULL, NULL, LOGON_WITH_PROFILE, NULL, (LPWSTR)(LPCWSTR)strCmd, CREATE_UNICODE_ENVIRONMENT, NULL, NULL, &si, &pi);
+    CloseHandle(hToken);
+
+    if (!ret) {
+        ShowError();
+        MessageBox(NULL, strCmd, _T("创建进程失败"), 0);
+        ::exit(0);
+    
+    }
+
+    WaitForSingleObject(pi.hProcess, INFINITE);
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+
+
+
+}
+
+
+
 
 
 int main()
 {
-    if (IsAdmin()) {TRACE("当前程序以管理员权限运行！\r\n");}
-    else { TRACE("当前程序以普通权限运行！\r\n");}
-
     int nRetCode = 0;
+
+    
 
     HMODULE hModule = ::GetModuleHandle(nullptr);
 
@@ -138,8 +180,22 @@ int main()
         }
         else
         {
+            if (IsAdmin()) {
+                TRACE("当前程序以管理员权限运行！\r\n");
+                MessageBox(NULL, _T("管理员用户权限！！"), _T("用户状态"), 0);
+            }
+            else {
+                TRACE("当前程序以普通权限运行！\r\n");
+
+                RunAsAdmin();
+                TRACE("提权成功,当前程序以管理员权限运行！\r\n");
+
+                MessageBox(NULL, _T("提权成功,当前程序以管理员权限运行！！"), _T("用户状态"), 0);
+                return nRetCode;
+            }
+
             CCommand cmd;
-            //ChooseAutoInvoke();
+            //ChooseAutoInvoke();    //开机自启动关闭（有bug）
             int ret = CServerSocket::getInstance()->Run(&CCommand::RunCommand, &cmd);
             switch (ret) {
             case -1:
