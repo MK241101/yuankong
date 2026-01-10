@@ -8,7 +8,7 @@
 #include <atlimage.h>
 #include "Command.h"
 #include<conio.h>
-
+#include"CEdoyunQueue.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -141,43 +141,29 @@ int main()
     if (!CEdoyunTool::Init())return 1;
     printf("按任意键退出程序！\r\n");
 
-    HANDLE hIOCP = INVALID_HANDLE_VALUE; //   IOCP
-    hIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, NULL, 1);  //创建IOCP完成端口
+    CEdoyunQueue<std::string> lstStrings;
+    ULONGLONG tick0 = GetTickCount64(), tick = GetTickCount64();
 
-    if (hIOCP == INVALID_HANDLE_VALUE || hIOCP == NULL) {
-        printf("IOCP创建失败！%d\r\n", GetLastError());
-        return 1;
-    }
-
-    HANDLE hThread=(HANDLE)_beginthread(threadQueueEntry, 0, hIOCP);   //创建工作线程
-    
-    ULONGLONG tick = GetTickCount64();             // 记录初始时间戳，用于定时投递任务
-    ULONGLONG tick0 = GetTickCount64();             // 记录初始时间戳，用于定时投递任务
-
-    int count = 0, count0 = 0;
-
-    while (_kbhit() == 0) {                        // 死循环：只要【没有按下任意键】，就持续运行投递任务
-        if (GetTickCount64() - tick > 1300) {      // 每1300毫秒，投递【POP取数据】任务到IOCP队列
-            PostQueuedCompletionStatus(hIOCP, sizeof(IOCP_PARAM), (ULONG_PTR)new IOCP_PARAM(IocpListPop, "hello world",func), NULL);
+    while (_kbhit() == 0) { //完成端口 把请求与实现 分离了
+        if (GetTickCount64() - tick0 > 1300) {
+            lstStrings.PushBack("hello world");
             tick0 = GetTickCount64();
-            count++;
         }
-        if (GetTickCount64() - tick > 2000) {      // 每2000毫秒，投递【PUSH加数据】任务到IOCP队列，并重置时间戳
-            PostQueuedCompletionStatus(hIOCP, sizeof(IOCP_PARAM), (ULONG_PTR)new IOCP_PARAM(IocpListPush, "hello world"), NULL);
+        if (GetTickCount64() - tick > 2000) {
+            std::string str;
+            lstStrings.PopFront(str);
             tick = GetTickCount64();
-            count0++;
+            printf("pop from queue:%s\r\n", str.c_str());
         }
-        Sleep(1);     // 让出CPU，避免主线程空转占用100%CPU
-    
+        Sleep(1);
     }
-    if (hIOCP != NULL) {    //程序退出
-        PostQueuedCompletionStatus(hIOCP, 0, NULL, NULL);
-        WaitForSingleObject(hThread, INFINITE);      //等待线程结束
-    }
-    CloseHandle(hIOCP);
 
-    printf("执行完成!!!  count=%d,count0=%d\r\n", count, count0);
+    printf("exit done!size %d\r\n", lstStrings.Size());
+    lstStrings.Clear();
+    printf("exit done!size %d\r\n", lstStrings.Size());
+
     ::exit(0);
+
     return 0;
     /*
     if (CEdoyunTool::IsAdmin()) {

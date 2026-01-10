@@ -150,7 +150,6 @@
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="CEdoyunQueue.cpp" />
     <ClCompile Include="Command.cpp" />
     <ClCompile Include="EdoyunTool.cpp" />
     <ClCompile Include="LockDialog.cpp" />
