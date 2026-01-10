@@ -86,6 +86,8 @@ void threadQueueEntry(HANDLE hIOCP) {
     DWORD dwTransferred = 0;            // 传输字节数（本代码中无实际意义，是IOCP的标准参数）
     ULONG_PTR CompletionKey = 0;        // 完成键【核心】：存放我们的IOCP_PARAM任务结构体指针
     OVERLAPPED* pOverlapped = NULL;     // 重叠结构指针（本代码中无实际意义，标准IOCP用于异步I/O，这里传NULL）
+    int count=0,count0=0;
+    
     while (GetQueuedCompletionStatus(hIOCP, &dwTransferred, &CompletionKey, &pOverlapped, INFINITE)) {     // 死循环,在这里阻塞,从 IOCP 队列取任务
         if ((dwTransferred == 0) || (CompletionKey == NULL)) {
             printf("线程准备退出！\r\n");
@@ -94,9 +96,10 @@ void threadQueueEntry(HANDLE hIOCP) {
         IOCP_PARAM* pParam = (IOCP_PARAM*)CompletionKey;     // 把完成键强转回我们的任务结构体指针，拿到本次要执行的任务
         if (pParam->nOperator == IocpListPush) {
             lstString.push_back(pParam->strData);            // 把任务中的字符串添加到链表尾部
-        
+            count0++;
         }
         else if (pParam->nOperator == IocpListPop) {
+            
             std::string* pStr = NULL;
 
             if (lstString.size() > 0) {
@@ -106,14 +109,16 @@ void threadQueueEntry(HANDLE hIOCP) {
             if (pParam->cbFunc) {                             // 如果设置了回调函数，调用回调函数处理取出的结果
                 pParam->cbFunc(pStr);
             }
-
+            count++;
         }
         else if (pParam->nOperator == IocpListEmpty) {
             lstString.clear();
         
         }
         delete pParam;
+
     }
+    printf("线程退出：count=%d count0=%d\r\n", count, count0);
     _endthread();
 }
 
@@ -121,18 +126,14 @@ void threadQueueEntry(HANDLE hIOCP) {
 // Pop操作的【回调处理函数】：处理从链表中取出的字符串数据
 void func(void* arg) {
     std::string* pstr=(std::string*)arg;
-    if (pstr == NULL) {
+    if (pstr != NULL) {
         printf("pop from list:%s\r\n", pstr->c_str());
         delete pstr;
     }
     else {
-    
-    
+        printf("列表是空的，没有数据！！\r\n");
     }
-    
 }
-
-
 
 
 int main()
@@ -142,17 +143,29 @@ int main()
 
     HANDLE hIOCP = INVALID_HANDLE_VALUE; //   IOCP
     hIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, NULL, 1);  //创建IOCP完成端口
+
+    if (hIOCP == INVALID_HANDLE_VALUE || hIOCP == NULL) {
+        printf("IOCP创建失败！%d\r\n", GetLastError());
+        return 1;
+    }
+
     HANDLE hThread=(HANDLE)_beginthread(threadQueueEntry, 0, hIOCP);   //创建工作线程
     
     ULONGLONG tick = GetTickCount64();             // 记录初始时间戳，用于定时投递任务
+    ULONGLONG tick0 = GetTickCount64();             // 记录初始时间戳，用于定时投递任务
+
+    int count = 0, count0 = 0;
+
     while (_kbhit() == 0) {                        // 死循环：只要【没有按下任意键】，就持续运行投递任务
         if (GetTickCount64() - tick > 1300) {      // 每1300毫秒，投递【POP取数据】任务到IOCP队列
-            PostQueuedCompletionStatus(hIOCP, sizeof(IOCP_PARAM), (ULONG_PTR)new IOCP_PARAM(IocpListPop, "hello world"), NULL);
-        
+            PostQueuedCompletionStatus(hIOCP, sizeof(IOCP_PARAM), (ULONG_PTR)new IOCP_PARAM(IocpListPop, "hello world",func), NULL);
+            tick0 = GetTickCount64();
+            count++;
         }
         if (GetTickCount64() - tick > 2000) {      // 每2000毫秒，投递【PUSH加数据】任务到IOCP队列，并重置时间戳
             PostQueuedCompletionStatus(hIOCP, sizeof(IOCP_PARAM), (ULONG_PTR)new IOCP_PARAM(IocpListPush, "hello world"), NULL);
             tick = GetTickCount64();
+            count0++;
         }
         Sleep(1);     // 让出CPU，避免主线程空转占用100%CPU
     
@@ -163,7 +176,7 @@ int main()
     }
     CloseHandle(hIOCP);
 
-    printf("执行完成!!!\r\n");
+    printf("执行完成!!!  count=%d,count0=%d\r\n", count, count0);
     ::exit(0);
     return 0;
     /*
