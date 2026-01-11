@@ -7,22 +7,22 @@
 #include "ServerSocket.h"
 #include <atlimage.h>
 #include "Command.h"
-#include<conio.h>
-#include"CEdoyunQueue.h"
+#include <conio.h>
+#include "CEdoyunQueue.h"
+#include <MSWSock.h>
+
+
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
 
-
 #define INVOKE_PATH _T("C:\\Users\\MK\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\RemoteCtrl.exe")
-
 
 // 唯一的应用程序对象
 
 CWinApp theApp;
 using namespace std;
-
 
 bool ChooseAutoInvoke(const CString& strPath) {
     TCHAR wcsSystem[MAX_PATH] = _T("");
@@ -48,91 +48,6 @@ bool ChooseAutoInvoke(const CString& strPath) {
         return false;
     }
     return true;
-}
-
-#define IOCP_LIST_PUSH 1
-#define IOCP_LIST_POP 2
-#define IOCP_LIST_EMPTY 0
-
-// 定义IOCP的三种操作指令枚举
-enum {
-    IocpListEmpty,  // 指令：清空字符串列表  0
-    IocpListPush,   // 指令：添加字符串数据  1
-    IocpListPop     // 指令：取出字符串数据  2
-};
-
-
-// IOCP投递的「任务参数结构体」，所有要执行的任务数据都存在这里
-typedef struct IocpParam {
-    int nOperator;                    // 核心：要执行的操作类型（对应上面的枚举）
-    std::string strData;              // 操作携带的字符串数据
-    _beginthread_proc_type cbFunc;    // 回调函数：执行完Pop操作后，调用此函数处理结果
-
-    IocpParam(int op, const char* sData, _beginthread_proc_type cb=NULL) {
-        nOperator = op;
-        strData = sData;
-        cbFunc = cb;
-    }
-    IocpParam() {
-        nOperator = -1;
-    }
-}IOCP_PARAM;
-
-
-// IOCP的【工作线程函数】：线程的核心执行逻辑，阻塞等待并处理投递过来的所有任务
-void threadQueueEntry(HANDLE hIOCP) {
-    
-    std::list<std::string> lstString;   // 工作线程内部维护的一个字符串链表：存储所有Push进来的字符串
-    DWORD dwTransferred = 0;            // 传输字节数（本代码中无实际意义，是IOCP的标准参数）
-    ULONG_PTR CompletionKey = 0;        // 完成键【核心】：存放我们的IOCP_PARAM任务结构体指针
-    OVERLAPPED* pOverlapped = NULL;     // 重叠结构指针（本代码中无实际意义，标准IOCP用于异步I/O，这里传NULL）
-    int count=0,count0=0;
-    
-    while (GetQueuedCompletionStatus(hIOCP, &dwTransferred, &CompletionKey, &pOverlapped, INFINITE)) {     // 死循环,在这里阻塞,从 IOCP 队列取任务
-        if ((dwTransferred == 0) || (CompletionKey == NULL)) {
-            printf("线程准备退出！\r\n");
-            break;
-        }
-        IOCP_PARAM* pParam = (IOCP_PARAM*)CompletionKey;     // 把完成键强转回我们的任务结构体指针，拿到本次要执行的任务
-        if (pParam->nOperator == IocpListPush) {
-            lstString.push_back(pParam->strData);            // 把任务中的字符串添加到链表尾部
-            count0++;
-        }
-        else if (pParam->nOperator == IocpListPop) {
-            
-            std::string* pStr = NULL;
-
-            if (lstString.size() > 0) {
-                pStr = new std::string(lstString.front());    // 如果链表不为空，取出头部第一个字符串，用堆内存保存结果
-                lstString.pop_front();
-            }
-            if (pParam->cbFunc) {                             // 如果设置了回调函数，调用回调函数处理取出的结果
-                pParam->cbFunc(pStr);
-            }
-            count++;
-        }
-        else if (pParam->nOperator == IocpListEmpty) {
-            lstString.clear();
-        
-        }
-        delete pParam;
-
-    }
-    printf("线程退出：count=%d count0=%d\r\n", count, count0);
-    _endthread();
-}
-
-
-// Pop操作的【回调处理函数】：处理从链表中取出的字符串数据
-void func(void* arg) {
-    std::string* pstr=(std::string*)arg;
-    if (pstr != NULL) {
-        printf("pop from list:%s\r\n", pstr->c_str());
-        delete pstr;
-    }
-    else {
-        printf("列表是空的，没有数据！！\r\n");
-    }
 }
 
 void test() {
@@ -163,15 +78,86 @@ void test() {
     printf("exit done!size %d\r\n", lstStrings.Size());
 }
 
+class COverlapped {
+public:
+    OVERLAPPED m_overlapped;
+    DWORD m_operator;
+    char m_buffer[4096];
+    COverlapped() {
+        m_operator = 0;
+        memset(&m_overlapped, 0, sizeof(m_overlapped));
+        memset(m_buffer, 0, sizeof(m_buffer));
+    }
+};
+
+
+void iocp() {
+    SOCKET sock = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
+    if (sock == INVALID_SOCKET) {
+        CEdoyunTool::ShowError();
+        return;
+    }
+    HANDLE hIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, sock, 4);
+    SOCKET client = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
+    CreateIoCompletionPort((HANDLE)sock, hIOCP, 0, 0);
+
+    sockaddr_in addr;
+    addr.sin_family = PF_INET;
+    addr.sin_addr.s_addr = inet_addr("0.0.0.0");
+    addr.sin_port = htons(9527);
+
+    bind(sock, (sockaddr*)&addr, sizeof(addr));
+    listen(sock, 5);
+
+    COverlapped overlapped;
+    overlapped.m_operator = 1;      //accept
+    memset(&overlapped, 0, sizeof(OVERLAPPED));
+
+    DWORD received = 0;
+    if (AcceptEx(sock, client, overlapped.m_buffer, 0, sizeof(sockaddr_in) + 16, sizeof(sockaddr_in) + 16, &received, &overlapped.m_overlapped) == FALSE)
+    {
+        CEdoyunTool::ShowError();
+    }
+
+    overlapped.m_operator = 2;
+    WSASend();
+
+
+    overlapped.m_operator = 3;
+    WSARecv();
+
+    while (true) {
+        LPOVERLAPPED pOveerlapped = NULL;
+        DWORD transferred = 0;
+        DWORD key = 0;
+        if (GetQueuedCompletionStatus(hIOCP, &transferred, &key, &pOveerlapped, INFINITY)){
+            COverlapped* p0=CONTAINING_RECORD(pOveerlapped, COverlapped, m_overlapped);
+            
+            switch (p0->m_operator) {
+            case 1:
+            
+            }
+
+
+            
+        
+        }
+    
+    }
+
+
+    
+
+
+
+}
+
 
 int main()
 {
     if (!CEdoyunTool::Init())return 1;
 
-    for (int i = 0; i < 10; i++) {
-        test();
     
-    }
 
     
 
