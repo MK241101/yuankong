@@ -135,23 +135,23 @@ void func(void* arg) {
     }
 }
 
+void test() {
 
-int main()
-{
-    if (!CEdoyunTool::Init())return 1;
-    printf("按任意键退出程序！\r\n");
+    //printf("按任意键退出程序！\r\n");
 
-    CEdoyunQueue<std::string> lstStrings;
-    ULONGLONG tick0 = GetTickCount64(), tick = GetTickCount64();
+    CEdoyunQueue<std::string> lstStrings;    //实例化：存储string类型的线程安全队列
+    ULONGLONG tick0 = GetTickCount64(), tick = GetTickCount64(), total= GetTickCount64();
 
-    while (_kbhit() == 0) { //完成端口 把请求与实现 分离了
-        if (GetTickCount64() - tick0 > 1300) {
-            lstStrings.PushBack("hello world");
+    while (GetTickCount64()-total <= 1000) { 
+        if (GetTickCount64() - tick0 > 13) 
+        {
+            lstStrings.PushBack("hello world");       //每1300毫秒 执行一次【入队】：向队列中添加字符串"hello world"
             tick0 = GetTickCount64();
         }
-        if (GetTickCount64() - tick > 2000) {
+        if (GetTickCount64() - tick > 20) 
+        {
             std::string str;
-            lstStrings.PopFront(str);
+            lstStrings.PopFront(str);                 // 每2000毫秒 执行一次【出队】：从队列中取出元素并打印
             tick = GetTickCount64();
             printf("pop from queue:%s\r\n", str.c_str());
         }
@@ -161,8 +161,21 @@ int main()
     printf("exit done!size %d\r\n", lstStrings.Size());
     lstStrings.Clear();
     printf("exit done!size %d\r\n", lstStrings.Size());
+}
 
-    ::exit(0);
+
+int main()
+{
+    if (!CEdoyunTool::Init())return 1;
+
+    for (int i = 0; i < 10; i++) {
+        test();
+    
+    }
+
+    
+
+    //::exit(0);
 
     return 0;
     /*
