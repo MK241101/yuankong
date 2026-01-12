@@ -48,6 +48,9 @@
     <ClInclude Include="CEdoyunQueue.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="EdoyunThread.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="RemoteCtrl.cpp">
@@ -66,6 +69,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Command.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="EdoyunThread.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

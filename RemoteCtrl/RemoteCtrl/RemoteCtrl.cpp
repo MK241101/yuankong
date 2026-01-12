@@ -122,16 +122,15 @@ void iocp() {
     overlapped.m_operator = 2;
     WSASend();
 
-
     overlapped.m_operator = 3;
     WSARecv();
 
     while (true) {
-        LPOVERLAPPED pOveerlapped = NULL;
+        LPOVERLAPPED pOverlapped = NULL;
         DWORD transferred = 0;
         DWORD key = 0;
-        if (GetQueuedCompletionStatus(hIOCP, &transferred, &key, &pOveerlapped, INFINITY)){
-            COverlapped* p0=CONTAINING_RECORD(pOveerlapped, COverlapped, m_overlapped);
+        if (GetQueuedCompletionStatus(hIOCP, &transferred, &key, &pOverlapped, INFINITY)){
+            COverlapped* p0=CONTAINING_RECORD(pOverlapped, COverlapped, m_overlapped);
             
             switch (p0->m_operator) {
             case 1:
