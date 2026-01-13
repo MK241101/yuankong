@@ -1,6 +1,9 @@
 #pragma once
+#include "pch.h"
 #include<atomic>
 #include<vector>
+#include<mutex>
+#include<Windows.h>
 
 
 class ThreadFuncBase {};
@@ -10,19 +13,19 @@ typedef int (ThreadFuncBase::*FUNCTYPE)();
 
 class ThreadWorker {
 public:
-    ThreadWorker():func(NULL),thiz(NULL){}
+    ThreadWorker(): thiz(NULL), func(NULL){};
+
     ThreadWorker(ThreadFuncBase* obj, FUNCTYPE f):thiz(obj), func(f){}
-    ThreadWorker(const ThreadWorker& worker) {
-        thiz= worker.thiz;
-        func = worker.func;
     
+    ThreadWorker(const ThreadWorker& worker) {
+        thiz = worker.thiz;
+        func = worker.func;
     }
 
     ThreadWorker& operator=(const ThreadWorker& worker) {
         if (this != &worker) {
             thiz = worker.thiz;
             func = worker.func;
-        
         }
         return *this;
     }
@@ -34,7 +37,7 @@ public:
         return -1;
     }
 
-    bool IsValid() {
+    bool IsValid() const{
         return (thiz != NULL) && (func != NULL);
     
     }
@@ -46,8 +49,6 @@ private:
 
 
 };
-
-
 
 class EdoyunThread
 {
@@ -79,19 +80,37 @@ public:
     bool Stop() {
         if(m_bStatus==FALSE) return true;
         m_bStatus = false;
-        return WaitForSingleObject(m_hThread, INFINITY)== WAIT_OBJECT_0;
+
+        bool ret= WaitForSingleObject(m_hThread, INFINITE)== WAIT_OBJECT_0;
+        UpdateWorker();
+        return ret;
     }
 
     void UpdateWorker(const::ThreadWorker& worker=::ThreadWorker()) {
-        m_worker.store(worker);
-    
+        if (!worker.IsValid()) {
+            m_worker.store(NULL);
+            return;
+        }
+
+        if (m_worker.load() != NULL) {
+            ::ThreadWorker* pWorker = m_worker.load();
+            m_worker.store(NULL);
+            delete pWorker;
+        }
+
+        m_worker.store(new ::ThreadWorker(worker));
     }
    
+    bool IsIdle() {
+        return !m_worker.load()->IsValid();
+    }
+
+
 
 private:
     void ThreadWorker() {
         while (m_bStatus) {
-            ::ThreadWorker worker = m_worker.load();
+            ::ThreadWorker worker =*m_worker.load();
             if (worker.IsValid()) {
                 int ret = worker();
                 if (ret != 0) {
@@ -100,7 +119,7 @@ private:
                     OutputDebugString(str);
                 }
                 if (ret < 0) {
-                    m_worker.store(::ThreadWorker());
+                    m_worker.store(NULL);
                 }
 
             }
@@ -121,7 +140,7 @@ private:
 private:
     HANDLE m_hThread;
     bool m_bStatus;    //true 表示线程正在运行     false表示线程将要关闭
-    std::atomic<::ThreadWorker> m_worker;
+    std::atomic<::ThreadWorker*> m_worker;
 
 };
 
@@ -130,6 +149,9 @@ public:
     EdoyunThreadPool() {}
     EdoyunThreadPool(size_t size) {
         m_threads.resize(size);
+        for (size_t i = 0; i < size; i++) {
+            m_threads[i] = new EdoyunThread();
+        }
     }
     ~EdoyunThreadPool() {
         Stop();
@@ -139,14 +161,14 @@ public:
     bool Invoke() {
         bool ret = true;
         for (size_t i = 0; i < m_threads.size(); i++) {
-            if (m_threads[i].Start() == false) {
+            if (m_threads[i]->Start() == false) {
                 ret = false;
                 break;
             }
         }
         if (ret == false) {
             for (size_t i = 0; i < m_threads.size(); i++) {
-                m_threads[i].Stop();
+                m_threads[i]->Stop();
             }
         }
         return ret;
@@ -154,19 +176,41 @@ public:
 
     void Stop() {
         for (size_t i = 0; i < m_threads.size(); i++) {
-            m_threads[i].Stop();
+            m_threads[i]->Stop();
         }
     
     }
 
+    //返回-1  表示分配失败，所有线程都在忙  大于等于0 表示第n个线程分配来做这个事情
     int DispatchWorker(const ThreadWorker& worker) {
-    
-    
+        int index = -1;
+        m_lock.lock();
+        for (size_t i = 0; i < m_threads.size(); i++) {
+            if (m_threads[i]->IsIdle()) {
+                m_threads[i]->UpdateWorker(worker);
+                index = i;
+                break;
+            }
+        }
+        m_lock.unlock();
+        return index;
+    }
+
+    bool CheckThreadValid(size_t index) {
+        if (index < m_threads.size()) {
+            return m_threads[index]->IsValid();
+        }
+        return false;
     }
 
 
+
+
+
+
 private:
-    std::vector<EdoyunThread> m_threads;
-
-
+    std::mutex m_lock;
+    std::vector<EdoyunThread*> m_threads;
 };
+
+
