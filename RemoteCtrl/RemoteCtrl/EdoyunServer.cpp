@@ -6,6 +6,7 @@ AcceptOverlapped<op>::AcceptOverlapped() {
 	m_worker=ThreadWorker(this, (FUNCTYPE)& AcceptOverlapped<op>::AcceptWorker);
 	m_operator = EAccept;
 	memset(&m_overlapped, 0, sizeof(m_overlapped));
+
 	m_buffer.resize(1024);
 	m_server = NULL;
 }
