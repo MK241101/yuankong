@@ -53,7 +53,8 @@ inline RecvOverlapped<op>::RecvOverlapped() {
 }
 
 
-EdoyunClient::EdoyunClient() :m_isbusy(false), m_flags(0), m_overlapped(new ACCEPTOVERLAPPED()),m_recv(new RECVOVERLAPPED()),m_send(new SENDOVERLAPPED()){
+EdoyunClient::EdoyunClient() :m_isbusy(false), m_flags(0), m_overlapped(new ACCEPTOVERLAPPED()),m_recv(new RECVOVERLAPPED()),
+			m_send(new SENDOVERLAPPED()), m_vecSend(this,(SENDCALLBACK)& EdoyunClient::SendData) {
 	m_sock = WSASocket(PF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
 	m_buffer.resize(1024);
 	memset(&m_laddr, 0, sizeof(m_laddr));
@@ -64,8 +65,6 @@ void EdoyunClient::SetOverlapped(PCLIENT& ptr) {
 	m_overlapped->m_client = ptr;
 	m_recv->m_client = ptr;
 	m_send->m_client = ptr;
-
-
 }
 
 EdoyunClient::operator LPOVERLAPPED() { return &m_overlapped->m_overlapped; }
@@ -78,6 +77,26 @@ LPWSABUF EdoyunClient::RecvWSABuffer()
 LPWSABUF EdoyunClient::SendWSABuffer()
 {
 	return &m_send->m_wsabuffer;
+}
+
+int EdoyunClient::Recv()   //同步数据接收函数（实际业务中会被异步逻辑替代）
+{              
+	int ret = recv(m_sock, m_buffer.data() + m_used, m_buffer.size() - m_used, 0);
+	if (ret <= 0)return -1;
+	m_used += (size_t)ret;
+	//TODO:解析数据
+	return 0;
+}
+
+int EdoyunClient::Send(void* buffer, size_t nSize)
+{
+	std::vector<char> data(nSize);
+	memcpy(data.data(), buffer, nSize);
+	if (m_vecSend.PushBack(data)) {
+		return 0;
+	}
+
+	return -1;
 }
 
 bool EdoyunServer::StartService() {

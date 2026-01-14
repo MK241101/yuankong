@@ -55,6 +55,8 @@ class EdoyunThread
 public:
     EdoyunThread() {
         m_hThread = NULL;
+        m_bStatus = false;
+
     }
 
     ~EdoyunThread() {

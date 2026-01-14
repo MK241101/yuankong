@@ -2,7 +2,7 @@
 #include<atomic>
 #include"pch.h"
 #include<list>
-
+#include"EdoyunThread.h"
 
 template<class T>
 class CEdoyunQueue        //线程安全队列（利用IOCP）
@@ -70,7 +70,7 @@ public:
         return ret;
     }
 
-    bool PopFront(T& data) {              //从队列头部取出元素，阻塞式
+    virtual bool PopFront(T& data) {              //从队列头部取出元素，阻塞式
         HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);              //创建【手动重置事件】：用于阻塞等待出队操作执行完成
         IocpParam Param(EQPop, data, hEvent);                     //封装【出队指令 + 事件句柄】
         
@@ -127,14 +127,14 @@ public:
         return ret;
     
     }
-private:
+protected:
     static void threadEntry(void* arg) {
         CEdoyunQueue<T>* thiz = (CEdoyunQueue<T>*)arg;
         thiz->threadMain();
         _endthread();
     }
 
-    void DealParam(PPARAM* pParam) {
+    virtual void DealParam(PPARAM* pParam) {
         switch (pParam->nOperator)
         {
         case EQPush:
@@ -166,7 +166,7 @@ private:
         }
     }
 
-    void threadMain() {
+    virtual void threadMain() {
         DWORD dwTransferred = 0;        // 接收传输字节数，无实际意义，仅为API参数
         PPARAM* pParam = NULL;          // 指向任务参数结构体的指针
         ULONG_PTR CompletionKey = 0;    // 完成键：核心！接收投递过来的任务参数指针
@@ -196,15 +196,98 @@ private:
         CloseHandle(m_hCompeletionPort);
     }
 
-private:
+protected:
     std::list<T> m_lstData;            // 底层存储容器：std::list，增删效率高
     HANDLE m_hCompeletionPort;         // IOCP核心句柄：完成端口句柄
     HANDLE m_hThread;                  // IOCP工作线程句柄
     std::atomic<bool> m_lock;          // 原子布尔锁：线程安全的销毁标记，无锁开销
-
-
-
-
-
 };
 
+
+template<class T>
+class EdoyunSendQueue :public CEdoyunQueue<T>,public ThreadFuncBase {
+
+public:
+    typedef int (ThreadFuncBase::* EDYCALLBACK)(T& data);
+
+    EdoyunSendQueue(ThreadFuncBase* obj, EDYCALLBACK callback): CEdoyunQueue<T>(),m_base(obj), m_callback(callback) {
+        m_thread.Start();
+        m_thread.UpdateWorker(::ThreadWorker(this,&EdoyunSendQueue<T>::threadTick));
+    
+    }
+    
+
+
+protected:
+    virtual bool PopFront(T& data) = delete;
+    bool PopFront(){                                          //从队列头部取出元素，阻塞式
+        IocpParam* Param=new IocpParam(EQPop, T());           //封装【出队指令 + 事件句柄】
+
+        if (m_lock) {                     // 如果队列已销毁，释放事件句柄并返回失败
+            delete Param;
+            return false;
+        }
+        bool ret = PostQueuedCompletionStatus(m_hCompeletionPort, sizeof(PPARAM), (ULONG_PTR)&Param, NULL);  //投递出队任务到IOCP
+        /*
+        (ULONG_PTR)&Param：主线程栈对象的内存地址，强转后作为「完成键」，投递到 IOCP 完成端口
+        把主线程栈对象的地址，交给 IOCP 线程的核心操作，也是跨线程访问的起点
+        */
+        if (ret == false) {              // 投递失败，释放事件句柄
+            delete Param;
+            return false;
+        }
+        
+        //CloseHandle(hEvent);
+        return ret;
+    }
+
+    void threadTick() {
+        if (m_lstData.size() > 0) {
+            PopFront();
+        }
+        Sleep(1);
+        return 0;
+    }
+
+
+    virtual void DealParam(typename CEdoyunQueue<T>::PPARAM* pParam) {
+        switch (pParam->nOperator)
+        {
+        case EQPush:
+            m_lstData.push_back(pParam->Data);
+            delete pParam;
+            break;
+
+        case EQPop:
+            if (m_lstData.size() > 0) {             // IOCP 线程，通过内存地址，直接修改了主线程栈对象的成员变量 
+                pParam->Data = m_lstData.front();   //【IOCP线程 访问+修改 主线程的栈对象】   跨线程访问栈对象
+                if((m_base->*m_callback)(pParam->Data)==0)
+                    m_lstData.pop_front();
+            }
+            delete pParam;
+            break;
+
+        case EQSize:
+            pParam->nOperator = m_lstData.size();
+            if (pParam->hEvent != NULL) SetEvent(pParam->hEvent);
+            break;
+
+        case EQClear:
+            m_lstData.clear();
+            delete pParam;
+            break;
+
+        default:
+            OutputDebugStringA("unknown operator!\r\n");
+            break;
+        }
+    }
+
+private:
+    ThreadFuncBase* m_base;
+    EDYCALLBACK m_callback;
+    EdoyunThread m_thread;
+};
+
+
+typedef EdoyunSendQueue<std::vector<char>>::EDYCALLBACK SENDCALLBACK;

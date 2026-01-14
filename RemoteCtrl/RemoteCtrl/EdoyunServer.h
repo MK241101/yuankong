@@ -6,13 +6,13 @@
 
 
 
-
+//标记重叠IO事件类型
 enum EdoyunOperator{
-	ENone,
-	EAccept,
-	ERecv,
-	ESend,
-	EError
+	ENone,		// 无操作
+	EAccept,	// 客户端连接接入操作
+	ERecv,		// 数据接收操作
+	ESend,		// 数据发送操作
+	EError		// 错误处理操作
 
 };
 
@@ -20,16 +20,16 @@ enum EdoyunOperator{
 class EdoyunServer;
 class EdoyunClient;
 typedef std::shared_ptr<EdoyunClient> PCLIENT;
-
-class EdoyunOverlapped {
+ 
+class EdoyunOverlapped {         // 所有具体IO操作重叠对象的父类
 public:
 	OVERLAPPED m_overlapped;
 	DWORD m_operator;            // 重叠IO的操作类型，对应EdoyunOperator枚举 
-	std::vector<char> m_buffer;   
+	std::vector<char> m_buffer;  // IO操作的缓冲区：接收/发送数据都存在这里
 	ThreadWorker m_worker;       // 线程池任务对象：封装【处理函数+调用者】，用于线程池异步执行业务逻辑
-	EdoyunServer* m_server;
-	PCLIENT m_client;
-	WSABUF m_wsabuffer;
+	EdoyunServer* m_server;      // 指向所属的服务器对象
+	PCLIENT m_client;            // 指向当前IO操作关联的客户端对象
+	WSABUF m_wsabuffer;          // Windows网络编程缓冲区，用于WSARecv/WSASend等重叠IO函数
 
 };
 
@@ -43,42 +43,36 @@ template<EdoyunOperator>class SendOverlapped;
 typedef SendOverlapped<ESend> SENDOVERLAPPED;
 
 
-class EdoyunClient {
+class EdoyunClient:public ThreadFuncBase {      // 客户端连接对象，每个客户端连接对应一个Socket、一套接收/发送/接入的重叠对象、缓冲区等
 public:
 	EdoyunClient();
 
 	~EdoyunClient() { closesocket(m_sock); }
 
-	void SetOverlapped(PCLIENT& ptr);
+	void SetOverlapped(PCLIENT& ptr);			 // 给当前客户端的所有重叠对象绑定自身的智能指针，让重叠对象能关联到客户端
 
+	operator SOCKET() { return m_sock; }		 // 重载类型转换符：直接将客户端对象转为SOCKET，简化代码书写
 
-	operator SOCKET() { return m_sock; }
+	operator PVOID() { return &m_buffer[0]; }    // 重载类型转换符：直接将客户端对象转为缓冲区首地址，给AcceptEx用
 
-	operator PVOID() { return &m_buffer[0]; }
+	operator LPOVERLAPPED();                     // 重载类型转换符：直接将客户端对象转为重叠IO结构体指针，给重叠IO函数用
 
-	operator LPOVERLAPPED();
+	operator LPDWORD() { return &m_received; }   // 重载类型转换符：直接将客户端对象转为DWORD指针，接收重叠IO的返回字节数
 
-	operator LPDWORD() { return &m_received; }
+	LPWSABUF RecvWSABuffer();                    // 获取当前客户端的接收专用WSABUF缓冲区指针
 
-	LPWSABUF RecvWSABuffer();
+	LPWSABUF SendWSABuffer();                    // 获取当前客户端的发送专用WSABUF缓冲区指针
 
-	LPWSABUF SendWSABuffer();
+	DWORD& flags() { return m_flags; }						// 获取重叠IO的flags标记（WSARecv/WSASend用）
+	sockaddr_in* GetLoaclAddr() { return &m_laddr; }		// 获取客户端绑定的本地地址
+	sockaddr_in* GetRemoteAddr() { return &m_raddr; }		// 获取客户端的远端地址（客户端IP+端口）
+	size_t GetBufferSize()const { return m_buffer.size(); } // 获取缓冲区总大小
 
-	DWORD& flags() { return m_flags; }
-	sockaddr_in* GetLoaclAddr() { return &m_laddr; }
-	sockaddr_in* GetRemoteAddr() { return &m_raddr; }
-	size_t GetBufferSize()const { return m_buffer.size(); }
-
-
-	int Recv() {
-		int ret = recv(m_sock, m_buffer.data()+ m_used, m_buffer.size()- m_used, 0);
-		if (ret <= 0)return -1;
-		m_used += (size_t)ret;
-		//TODO:解析数据
-		return 0;
-	}
-
+	int Recv();
+	int Send(void* buffer, size_t nSize); 
+	int SendData(std::vector<char>& data);
 private:
+
 	SOCKET m_sock;
 	DWORD m_received;
 	DWORD m_flags;
@@ -90,7 +84,7 @@ private:
 	sockaddr_in m_laddr;
 	sockaddr_in m_raddr;
 	bool m_isbusy;
-
+	EdoyunSendQueue<std::vector<char>>m_vecSend;  //发送数据的队列
 
 };
 
@@ -102,12 +96,10 @@ class AcceptOverlapped :public EdoyunOverlapped, ThreadFuncBase {
 
 public:
 	AcceptOverlapped();
-	int AcceptWorker();
+	int AcceptWorker();          // Accept事件的核心业务处理函数，线程池异步执行
 	PCLIENT m_client;
 
 };
-
-
 
 
 template<EdoyunOperator>
@@ -122,7 +114,6 @@ public:
 
 
 };
-
 
 
 template<EdoyunOperator>
@@ -155,8 +146,6 @@ public:
 };
 
 typedef ErrorOverlapped<EError> ERROROVERLAPPED;
-
-
 
 
 
@@ -198,11 +187,7 @@ private:
 		setsockopt(m_sock, SOL_SOCKET, SO_REUSEADDR, (const char*)&opt, sizeof(opt));
 	}
 
-	
-
-
-	//IOCP核心工作线程函数,循环从IOCP中取出完成的重叠IO事件，分发到线程池处理
-	int threadIocp();
+	int threadIocp();  //IOCP核心工作线程函数,循环从IOCP中取出完成的重叠IO事件，分发到线程池处理
 private:
 	EdoyunThreadPool m_pool;                // 线程池对象：初始化10个工作线程，异步处理所有业务逻辑
 	HANDLE m_hIOCP;                         // IOCP完成端口核心句柄
