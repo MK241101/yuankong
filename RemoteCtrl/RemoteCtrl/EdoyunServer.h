@@ -28,10 +28,20 @@ public:
 	std::vector<char> m_buffer;   
 	ThreadWorker m_worker;       // 线程池任务对象：封装【处理函数+调用者】，用于线程池异步执行业务逻辑
 	EdoyunServer* m_server;
+	PCLIENT m_client;
+	WSABUF m_wsabuffer;
+
 };
 
 template<EdoyunOperator>class AcceptOverlapped;
 typedef AcceptOverlapped<EAccept> ACCEPTOVERLAPPED;   // 类型别名：简化模板类调用，固定模板参数为【EAccept】
+
+template<EdoyunOperator>class RecvOverlapped;
+typedef RecvOverlapped<ERecv> RECVOVERLAPPED;
+
+template<EdoyunOperator>class SendOverlapped;
+typedef SendOverlapped<ESend> SENDOVERLAPPED;
+
 
 class EdoyunClient {
 public:
@@ -50,17 +60,38 @@ public:
 
 	operator LPDWORD() { return &m_received; }
 
+	LPWSABUF RecvWSABuffer();
+
+	LPWSABUF SendWSABuffer();
+
+	DWORD& flags() { return m_flags; }
 	sockaddr_in* GetLoaclAddr() { return &m_laddr; }
 	sockaddr_in* GetRemoteAddr() { return &m_raddr; }
+	size_t GetBufferSize()const { return m_buffer.size(); }
+
+
+	int Recv() {
+		int ret = recv(m_sock, m_buffer.data()+ m_used, m_buffer.size()- m_used, 0);
+		if (ret <= 0)return -1;
+		m_used += (size_t)ret;
+		//TODO:解析数据
+		return 0;
+	}
 
 private:
 	SOCKET m_sock;
 	DWORD m_received;
+	DWORD m_flags;
 	std::shared_ptr<ACCEPTOVERLAPPED> m_overlapped;
+	std::shared_ptr<RECVOVERLAPPED> m_recv;
+	std::shared_ptr<SENDOVERLAPPED> m_send;
 	std::vector<char> m_buffer;
+	size_t m_used;              // 已经使用的缓冲区大小
 	sockaddr_in m_laddr;
 	sockaddr_in m_raddr;
 	bool m_isbusy;
+
+
 };
 
 
@@ -83,17 +114,14 @@ template<EdoyunOperator>
 class RecvOverlapped :public EdoyunOverlapped, ThreadFuncBase {
 
 public:
-	RecvOverlapped() :m_operator(EdoyunOperator::ERecv), m_worker(this, &RecvOverlapped::RecvWorker) {
-		memset(&m_overlapped, 0, sizeof(m_overlapped));
-		m_buffer.resize(1024*256);
-
-	}
+	RecvOverlapped();
 	int RecvWorker() {
-
-
+		int ret=m_client->Recv();
+		return ret;
 	}
+
+
 };
-typedef RecvOverlapped<ERecv> RECVOVERLAPPED;
 
 
 
@@ -101,17 +129,12 @@ template<EdoyunOperator>
 class SendOverlapped :public EdoyunOverlapped, ThreadFuncBase {
 
 public:
-	SendOverlapped() :m_operator(EdoyunOperator::ESend), m_worker(this, &SendOverlapped::SendWorker) {
-		memset(&m_overlapped, 0, sizeof(m_overlapped));
-		m_buffer.resize(1024 * 256);
-
-	}
+	SendOverlapped();
 	int SendWorker() {
 
-
+		return -1;
 	}
 };
-typedef SendOverlapped<ESend> SENDOVERLAPPED;
 
 
 
@@ -126,6 +149,7 @@ public:
 	}
 	int ErrorWorker() {
 
+		return -1;
 
 	}
 };
@@ -149,36 +173,7 @@ public:
 
 	~EdoyunServer() {}
 
-	bool StartService() {
-		
-		CreateSocket();
-
-		if (bind(m_sock, (sockaddr*)&m_addr, sizeof(m_addr)) == -1) {
-			closesocket(m_sock);
-			m_sock = INVALID_SOCKET;
-			return false;
-		}
-
-		if (listen(m_sock, 3) == -1) {
-			closesocket(m_sock);
-			m_sock = INVALID_SOCKET;
-			return false;
-		}
-
-		m_hIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 4);
-		if (m_hIOCP == NULL) {
-			closesocket(m_sock);
-			m_sock = INVALID_SOCKET;
-			m_hIOCP = INVALID_HANDLE_VALUE;
-			return false;
-		}
-
-		CreateIoCompletionPort((HANDLE)m_sock, m_hIOCP, (ULONG_PTR)this, 0);   //将【监听套接字】绑定到完成端口,该套接字的所有重叠IO事件，都会投递到这个IOCP中
-		m_pool.Invoke();
-		m_pool.DispatchWorker(ThreadWorker(this, (FUNCTYPE)&EdoyunServer::threadIocp));  //线程池分发【IOCP核心工作线程】：常驻后台循环获取IO事件
-		if (!NewAccept())return false;
-		return true;
-	}
+	bool StartService();
 
 	bool NewAccept() {
 		PCLIENT pClient(new EdoyunClient());
@@ -207,50 +202,7 @@ private:
 
 
 	//IOCP核心工作线程函数,循环从IOCP中取出完成的重叠IO事件，分发到线程池处理
-	int threadIocp() {
-		DWORD transferred = 0;                    // 本次IO实际传输的字节数：recv/send的字节数
-		ULONG_PTR CompletionKey = 0;              // 完成键：绑定套接字时传入的参数，此处是EdoyunServer*
-		OVERLAPPED* lpOverlapped = NULL;
-
-		if (GetQueuedCompletionStatus(m_hIOCP, &transferred, &CompletionKey, &lpOverlapped, INFINITE)) {  //阻塞等待IOCP中的完成事件
-			if (transferred > 0 && (CompletionKey != 0)) {
-				EdoyunOverlapped* pOverlapped = CONTAINING_RECORD(lpOverlapped, EdoyunOverlapped, m_overlapped);  //通过【结构体的成员指针】反推出【结构体对象的首地址】
-				switch (pOverlapped->m_operator) {           // 根据IO操作类型，分发到对应的业务处理逻辑
-					case EAccept:
-					{
-						ACCEPTOVERLAPPED* pOver=(ACCEPTOVERLAPPED*) pOverlapped;
-						m_pool.DispatchWorker(pOver->m_worker);
-					}break;
-
-					case ERecv:
-					{
-						RECVOVERLAPPED* pOver = (RECVOVERLAPPED*)pOverlapped;
-						m_pool.DispatchWorker(pOver->m_worker);
-					}break;
-
-					case ESend:
-					{
-						SENDOVERLAPPED* pOver = (SENDOVERLAPPED*)pOverlapped;
-						m_pool.DispatchWorker(pOver->m_worker);
-					}break;
-
-                    case EError:
-					{
-						ERROROVERLAPPED* pOver = (ERROROVERLAPPED*)pOverlapped;
-						m_pool.DispatchWorker(pOver->m_worker);
-					}break;
-
-				}
-			}
-			else {
-				return -1;
-			}
-		}
-
-		return 0;
-
-
-	}
+	int threadIocp();
 private:
 	EdoyunThreadPool m_pool;                // 线程池对象：初始化10个工作线程，异步处理所有业务逻辑
 	HANDLE m_hIOCP;                         // IOCP完成端口核心句柄
@@ -259,5 +211,4 @@ private:
 	std::map<SOCKET, std::shared_ptr<EdoyunClient>> m_client; // 客户端管理容器：fd映射客户端对象，智能指针自动释放
 
 };
-
 
