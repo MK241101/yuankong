@@ -16,7 +16,6 @@ enum EdoyunOperator{
 
 };
 
-
 class EdoyunServer;
 class EdoyunClient;
 typedef std::shared_ptr<EdoyunClient> PCLIENT;
@@ -28,7 +27,7 @@ public:
 	std::vector<char> m_buffer;  // IO操作的缓冲区：接收/发送数据都存在这里
 	ThreadWorker m_worker;       // 线程池任务对象：封装【处理函数+调用者】，用于线程池异步执行业务逻辑
 	EdoyunServer* m_server;      // 指向所属的服务器对象
-	EdoyunClient* m_client;       // 指向当前IO操作关联的客户端对象
+	EdoyunClient* m_client;      // 指向当前IO操作关联的客户端对象
 	WSABUF m_wsabuffer;          // Windows网络编程缓冲区，用于WSARecv/WSASend等重叠IO函数
 	virtual ~EdoyunOverlapped() {
 		m_buffer.clear();
@@ -70,17 +69,19 @@ public:
 	operator LPDWORD() { return &m_received; }   // 重载类型转换符：直接将客户端对象转为DWORD指针，接收重叠IO的返回字节数
 
 	LPWSABUF RecvWSABuffer();                    // 获取当前客户端的接收专用WSABUF缓冲区指针
-
+	LPWSAOVERLAPPED RecvOverlapped();
 	LPWSABUF SendWSABuffer();                    // 获取当前客户端的发送专用WSABUF缓冲区指针
+	LPWSAOVERLAPPED SendOverlapped();
 
 	DWORD& flags() { return m_flags; }						// 获取重叠IO的flags标记（WSARecv/WSASend用）
-	sockaddr_in* GetLoaclAddr() { return &m_laddr; }		// 获取客户端绑定的本地地址
+	sockaddr_in* GetLocalAddr() { return &m_laddr; }		// 获取客户端绑定的本地地址
 	sockaddr_in* GetRemoteAddr() { return &m_raddr; }		// 获取客户端的远端地址（客户端IP+端口）
 	size_t GetBufferSize()const { return m_buffer.size(); } // 获取缓冲区总大小
 
 	int Recv();
 	int Send(void* buffer, size_t nSize); 
 	int SendData(std::vector<char>& data);
+
 private:
 
 	SOCKET m_sock;
@@ -120,8 +121,6 @@ public:
 		int ret=m_client->Recv();
 		return ret;
 	}
-
-
 };
 
 
@@ -174,28 +173,11 @@ public:
 
 	bool StartService();
 
-	bool NewAccept() {
-		PCLIENT pClient(new EdoyunClient());
-		pClient->SetOverlapped(pClient);
-		m_client.insert(std::pair<SOCKET, PCLIENT>(*pClient, pClient));
-
-		if (!AcceptEx(m_sock, *pClient, *pClient, 0, sizeof(sockaddr_in) + 16, sizeof(sockaddr_in) + 16, *pClient, *pClient)) {
-
-			closesocket(m_sock);
-			m_sock = INVALID_SOCKET;
-			m_hIOCP = INVALID_HANDLE_VALUE;
-			return false;
-		}
-		return true;
-	}
+	bool NewAccept();
 	
-
+	void BindNewSocket(SOCKET s);
 private:
-	void CreateSocket() {
-		m_sock = WSASocket(PF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);  //创建【重叠IO模式】的监听套接字
-		int opt = 1;                                                                //设置端口复用：解决服务器重启后端口被占用的问题
-		setsockopt(m_sock, SOL_SOCKET, SO_REUSEADDR, (const char*)&opt, sizeof(opt));
-	}
+	void CreateSocket();
 
 	int threadIocp();  //IOCP核心工作线程函数,循环从IOCP中取出完成的重叠IO事件，分发到线程池处理
 private:
