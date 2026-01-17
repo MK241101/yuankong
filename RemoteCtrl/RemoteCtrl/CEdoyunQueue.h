@@ -44,7 +44,7 @@ public:
         }
     }
 
-    ~CEdoyunQueue() {            
+    virtual ~CEdoyunQueue() {            
         if (m_lock) return;       // 如果已经加锁，直接返回，防止重复销毁
         m_lock = true;            // 加锁：标记队列开始销毁，禁止再投递新任务
         PostQueuedCompletionStatus(m_hCompeletionPort, 0, NULL, NULL);        // 投递【退出指令】到IOCP
@@ -212,22 +212,27 @@ public:
 
     EdoyunSendQueue(ThreadFuncBase* obj, EDYCALLBACK callback): CEdoyunQueue<T>(),m_base(obj), m_callback(callback) {
         m_thread.Start();
-        m_thread.UpdateWorker(::ThreadWorker(this,&EdoyunSendQueue<T>::threadTick));
+        m_thread.UpdateWorker(::ThreadWorker(this,(FUNCTYPE)& EdoyunSendQueue<T>::threadTick));
     
     }
     
+    virtual ~EdoyunSendQueue() {
+        m_base = NULL;
+        m_callback = NULL;
+        m_thread.Stop();
 
+    }
 
 protected:
-    virtual bool PopFront(T& data) = delete;
+    virtual bool PopFront(T& data) { return false; };
     bool PopFront(){                                          //从队列头部取出元素，阻塞式
-        IocpParam* Param=new IocpParam(EQPop, T());           //封装【出队指令 + 事件句柄】
+        typename CEdoyunQueue<T>::IocpParam* Param=new typename CEdoyunQueue<T>::IocpParam(CEdoyunQueue<T>::EQPop, T());   //封装【出队指令 + 事件句柄】
 
-        if (m_lock) {                     // 如果队列已销毁，释放事件句柄并返回失败
+        if (CEdoyunQueue<T>::m_lock) {                     // 如果队列已销毁，释放事件句柄并返回失败
             delete Param;
             return false;
         }
-        bool ret = PostQueuedCompletionStatus(m_hCompeletionPort, sizeof(PPARAM), (ULONG_PTR)&Param, NULL);  //投递出队任务到IOCP
+        bool ret = PostQueuedCompletionStatus(CEdoyunQueue<T>::m_hCompeletionPort, sizeof(*Param), (ULONG_PTR)&Param, NULL);  //投递出队任务到IOCP
         /*
         (ULONG_PTR)&Param：主线程栈对象的内存地址，强转后作为「完成键」，投递到 IOCP 完成端口
         把主线程栈对象的地址，交给 IOCP 线程的核心操作，也是跨线程访问的起点
@@ -241,11 +246,13 @@ protected:
         return ret;
     }
 
-    void threadTick() {
-        if (m_lstData.size() > 0) {
+    int threadTick() {
+        if ((WaitForSingleObject(CEdoyunQueue<T>::m_hThread, 0) != WAIT_TIMEOUT))
+            return 0;
+        if (CEdoyunQueue<T>::m_lstData.size() > 0) {
             PopFront();
         }
-        Sleep(1);
+        //Sleep(1);
         return 0;
     }
 
@@ -253,27 +260,27 @@ protected:
     virtual void DealParam(typename CEdoyunQueue<T>::PPARAM* pParam) {
         switch (pParam->nOperator)
         {
-        case EQPush:
-            m_lstData.push_back(pParam->Data);
+        case CEdoyunQueue<T>::EQPush:
+            CEdoyunQueue<T>::m_lstData.push_back(pParam->Data);
             delete pParam;
             break;
 
-        case EQPop:
-            if (m_lstData.size() > 0) {             // IOCP 线程，通过内存地址，直接修改了主线程栈对象的成员变量 
-                pParam->Data = m_lstData.front();   //【IOCP线程 访问+修改 主线程的栈对象】   跨线程访问栈对象
+        case CEdoyunQueue<T>::EQPop:
+            if (CEdoyunQueue<T>::m_lstData.size() > 0) {             // IOCP 线程，通过内存地址，直接修改了主线程栈对象的成员变量 
+                pParam->Data = CEdoyunQueue<T>::m_lstData.front();   //【IOCP线程 访问+修改 主线程的栈对象】   跨线程访问栈对象
                 if((m_base->*m_callback)(pParam->Data)==0)
-                    m_lstData.pop_front();
+                    CEdoyunQueue<T>::m_lstData.pop_front();
             }
             delete pParam;
             break;
 
-        case EQSize:
-            pParam->nOperator = m_lstData.size();
+        case CEdoyunQueue<T>::EQSize:
+            pParam->nOperator = CEdoyunQueue<T>::m_lstData.size();
             if (pParam->hEvent != NULL) SetEvent(pParam->hEvent);
             break;
 
-        case EQClear:
-            m_lstData.clear();
+        case CEdoyunQueue<T>::EQClear:
+            CEdoyunQueue<T>::m_lstData.clear();
             delete pParam;
             break;
 

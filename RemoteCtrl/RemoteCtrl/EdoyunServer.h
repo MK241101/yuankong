@@ -3,7 +3,7 @@
 #include "EdoyunThread.h"
 #include "CEdoyunQueue.h"
 #include <map>
-
+#include "EdoyunTool.h"
 
 
 //±ê¼ÇÖØµşIOÊÂ¼şÀàĞÍ
@@ -28,9 +28,11 @@ public:
 	std::vector<char> m_buffer;  // IO²Ù×÷µÄ»º³åÇø£º½ÓÊÕ/·¢ËÍÊı¾İ¶¼´æÔÚÕâÀï
 	ThreadWorker m_worker;       // Ïß³Ì³ØÈÎÎñ¶ÔÏó£º·â×°¡¾´¦Àíº¯Êı+µ÷ÓÃÕß¡¿£¬ÓÃÓÚÏß³Ì³ØÒì²½Ö´ĞĞÒµÎñÂß¼­
 	EdoyunServer* m_server;      // Ö¸ÏòËùÊôµÄ·şÎñÆ÷¶ÔÏó
-	PCLIENT m_client;            // Ö¸Ïòµ±Ç°IO²Ù×÷¹ØÁªµÄ¿Í»§¶Ë¶ÔÏó
+	EdoyunClient* m_client;       // Ö¸Ïòµ±Ç°IO²Ù×÷¹ØÁªµÄ¿Í»§¶Ë¶ÔÏó
 	WSABUF m_wsabuffer;          // WindowsÍøÂç±à³Ì»º³åÇø£¬ÓÃÓÚWSARecv/WSASendµÈÖØµşIOº¯Êı
-
+	virtual ~EdoyunOverlapped() {
+		m_buffer.clear();
+	}
 };
 
 template<EdoyunOperator>class AcceptOverlapped;
@@ -47,7 +49,15 @@ class EdoyunClient:public ThreadFuncBase {      // ¿Í»§¶ËÁ¬½Ó¶ÔÏó£¬Ã¿¸ö¿Í»§¶ËÁ¬½
 public:
 	EdoyunClient();
 
-	~EdoyunClient() { closesocket(m_sock); }
+	~EdoyunClient() { 
+		m_buffer.clear();
+		closesocket(m_sock); 
+		m_recv.reset(); 
+		m_send.reset();
+		m_overlapped.reset();
+		m_vecSend.Clear();
+
+	}
 
 	void SetOverlapped(PCLIENT& ptr);			 // ¸øµ±Ç°¿Í»§¶ËµÄËùÓĞÖØµş¶ÔÏó°ó¶¨×ÔÉíµÄÖÇÄÜÖ¸Õë£¬ÈÃÖØµş¶ÔÏóÄÜ¹ØÁªµ½¿Í»§¶Ë
 
@@ -97,7 +107,6 @@ class AcceptOverlapped :public EdoyunOverlapped, ThreadFuncBase {
 public:
 	AcceptOverlapped();
 	int AcceptWorker();          // AcceptÊÂ¼şµÄºËĞÄÒµÎñ´¦Àíº¯Êı£¬Ïß³Ì³ØÒì²½Ö´ĞĞ
-	PCLIENT m_client;
 
 };
 
@@ -160,7 +169,8 @@ public:
 		m_addr.sin_addr.s_addr = inet_addr(ip.c_str());
 	}
 
-	~EdoyunServer() {}
+
+	~EdoyunServer();
 
 	bool StartService();
 

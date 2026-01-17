@@ -102,7 +102,7 @@ int main()
 {
     if (!CEdoyunTool::Init())return 1;
 
-    
+    iocp();
 
     
 

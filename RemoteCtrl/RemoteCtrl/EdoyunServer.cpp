@@ -14,7 +14,7 @@ AcceptOverlapped<op>::AcceptOverlapped() {
 template<EdoyunOperator op>
 int AcceptOverlapped<op>::AcceptWorker() {             // Accept事件的业务处理函数：线程池异步执行
 	INT lLength = 0, rLength = 0;
-	if (*(LPDWORD)*m_client.get() > 0) {
+	if (*(LPDWORD)*m_client > 0) {
 		GetAcceptExSockaddrs(*m_client, 0, sizeof(sockaddr_in) + 16, sizeof(sockaddr_in) + 16,
 			(sockaddr**)m_client->GetLoaclAddr(), &lLength,     //本地地址
 			(sockaddr**)m_client->GetRemoteAddr(), &rLength);   //远程地址
@@ -62,9 +62,9 @@ EdoyunClient::EdoyunClient() :m_isbusy(false), m_flags(0), m_overlapped(new ACCE
 }
 
 void EdoyunClient::SetOverlapped(PCLIENT& ptr) {
-	m_overlapped->m_client = ptr;
-	m_recv->m_client = ptr;
-	m_send->m_client = ptr;
+	m_overlapped->m_client = ptr.get();
+	m_recv->m_client = ptr.get();
+	m_send->m_client = ptr.get();
 }
 
 EdoyunClient::operator LPOVERLAPPED() { return &m_overlapped->m_overlapped; }
@@ -97,6 +97,32 @@ int EdoyunClient::Send(void* buffer, size_t nSize)
 	}
 
 	return -1;
+}
+
+int EdoyunClient::SendData(std::vector<char>& data)
+{
+	if (m_vecSend.Size() > 0) {
+		int ret=WSASend(m_sock, SendWSABuffer(), 1, &m_received, m_flags, &m_send->m_overlapped, NULL);
+		if (ret != 0 && (WSAGetLastError() != WSA_IO_PENDING)) {
+			CEdoyunTool::ShowError();
+			return -1;
+		}
+	}
+	return 0;
+}
+
+EdoyunServer::~EdoyunServer()
+{
+	closesocket(m_sock);
+	std::map<SOCKET, PCLIENT>::iterator it = m_client.begin();
+	for (; it != m_client.end(); it++) {
+		it->second.reset();
+	
+	}
+	m_client.clear();
+	CloseHandle(m_hIOCP);
+	m_pool.Stop();
+
 }
 
 bool EdoyunServer::StartService() {
