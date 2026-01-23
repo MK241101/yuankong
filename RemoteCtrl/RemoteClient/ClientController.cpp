@@ -39,7 +39,6 @@ int CClientController::Invoke(CWnd*& pMainWin) {   // 启动远程客户端主对话框
 
 }
 
-	
 bool CClientController::SendCommandPacket(HWND hWnd,int nCmd, bool bAutoClose, BYTE* pData, size_t nLength, WPARAM wParam)
 {
 	TRACE("cmd=%d ,%s strat %lld\r\n", nCmd, __FUNCTION__, GetTickCount64());
