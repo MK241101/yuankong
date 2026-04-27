@@ -4,7 +4,7 @@
     "Projects": [
       {
         "Path": "RemoteCtrl\\RemoteCtrl.vcxproj",
-        "Action": "Start"
+        "Action": "StartWithoutDebugging"
       },
       {
         "Path": "RemoteClient\\RemoteClient.vcxproj",

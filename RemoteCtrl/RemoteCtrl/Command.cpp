@@ -27,6 +27,7 @@ CCommand::CCommand():threadid(0){
 
 CCommand::~CCommand(){}
 
+//命令调度入口，负责根据传入的命令 ID 分发到对应的处理函数
 int CCommand::ExcuteCommand(int nCmd, std::list<CPacket>& lstPacket, CPacket& inPacket)
 {
 	std::map<int, CMDFUNC>::iterator it = m_mapFunction.find(nCmd);

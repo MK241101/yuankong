@@ -12,9 +12,12 @@
 class CCommand
 {
 public:
-	CCommand();
+	CCommand();   // 初始化命令映射表m_mapFunction
 	~CCommand();
+    //命令调度入口，负责根据传入的命令 ID 分发到对应的处理函数
 	int ExcuteCommand(int nCmd, std::list<CPacket>& lstPacket,CPacket& inPacket);
+    
+    //静态回调函数，作为外部线程 / 模块调用命令的统一入口（因为静态函数不依赖实例，便于跨线程调用）。
     static void RunCommand(void* arg, int status, std::list<CPacket>& lstPacket, CPacket& inPacket) {
         CCommand* thiz=(CCommand*)arg;
         if (status > 0) {
@@ -33,16 +36,24 @@ protected:
     unsigned threadid;
 
 protected:
-    static unsigned __stdcall threadLockDlg(void* arg){
+    static unsigned __stdcall threadLockDlg(void* arg){     //锁定对话框线程入口函数
         CCommand* thiz=(CCommand*)arg;
         thiz->threadLockDlgMain();
         _endthreadex(0);
         return 0;
     }
 
+    /*
+    机器锁定的实现函数，运行在独立线程中，避免阻塞主线程
+    （1）创建全屏、置顶的非模态锁定对话框
+    （2）隐藏系统任务栏，限制鼠标活动；
+    （3）自定义消息循环，监听键盘键：按下键盘键则恢复任务栏、解锁鼠标、销毁对话框；
+    （4）保证对话框始终置顶。
+    */
     void threadLockDlgMain() {
         TRACE("%s(%d):%d\r\n", __FUNCTION__, __LINE__, GetCurrentThreadId());
         dlg.Create(IDD_DIALOG_INFO, NULL);  //创建非模态对话框
+        // 如果用模态对话框，则服务器卡死
         dlg.ShowWindow(SW_SHOW);
 
         CRect rect;

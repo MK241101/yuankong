@@ -22,7 +22,8 @@ public:
         OutputDebugStringA(strOut.c_str());
     }
 
-    static int Bytes2Image(CImage& image, const std::string& strBuffer) {
+	//将数据包中的字节流数据转换为MFC CImage图像
+    static int Bytes2Image(CImage& image, const std::string& strBuffer) {  
 		
 		BYTE* pData = (BYTE*)strBuffer.c_str();  //获取返回的数据包数据
 
